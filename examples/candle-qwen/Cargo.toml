@@ -1,0 +1,36 @@
+[package]
+name = "candle-qwen"
+edition = "2021"
+
+[dependencies]
+candle = { git = "https://github.com/huggingface/candle.git", rev = "637473cb5ee5eb2c354b8359c55d62a76d184c17", package = "candle-core" }
+candle-nn = { git = "https://github.com/huggingface/candle.git", rev = "637473cb5ee5eb2c354b8359c55d62a76d184c17" }
+candle-transformers = { git = "https://github.com/huggingface/candle.git", rev = "637473cb5ee5eb2c354b8359c55d62a76d184c17" }
+glowstick = { path = "../.." }
+
+accelerate-src = { version = "0.3.2", optional = true }
+anyhow = { version = "1", features = ["backtrace"] }
+clap = { version = "4.2.4", features = ["derive"] }
+cudarc = { version = "0.16.3", features = ["std", "cublas", "cublaslt", "curand", "driver", "nvrtc", "f16", "cuda-version-from-build-system", "dynamic-linking"], default-features=false, optional = true }
+half = { version = "2.5.0", features = ["num-traits", "use-intrinsics", "rand_distr"], optional = true }
+hf-hub = { version = "0.4.1", features = ["tokio"] }
+intel-mkl-src = { version = "0.8.1", features = ["mkl-static-lp64-iomp"], optional = true }
+serde = { version = "1.0.171", features = ["derive"] }
+serde_json = { version = "1.0.99" }
+thiserror = { version = "2.0.12" }
+tokenizers = { version = "0.21.0", default-features = false, features = ["onig"] }
+tracing = "0.1.37"
+tracing-chrome = "0.7.1"
+tracing-subscriber = "0.3.7"
+
+[build-dependencies]
+bindgen_cuda = { version = "0.1.1", optional = true }
+
+[features]
+default = []
+accelerate = ["dep:accelerate-src", "candle/accelerate", "candle-nn/accelerate", "candle-transformers/accelerate"]
+cuda = ["candle/cuda", "candle-nn/cuda", "candle-transformers/cuda", "dep:bindgen_cuda"]
+cudnn = ["candle/cudnn", "candle-nn/cudnn", "candle-transformers/cudnn"]
+mkl = ["dep:intel-mkl-src", "candle/mkl", "candle-nn/mkl", "candle-transformers/mkl"]
+nccl = ["cuda", "cudarc/nccl", "dep:half"]
+metal = ["candle/metal", "candle-nn/metal"]

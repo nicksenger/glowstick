@@ -1,0 +1,15 @@
+[package]
+name = "glowstick"
+description = "Type-level tensor shapes"
+version = "0.1.0"
+authors = ["Nick Senger <dev@nsenger.com>"]
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/nicksenger/glowstick"
+categories = ["science"]
+keywords = ["science", "math", "machine-learning", "metaprogramming", "types"]
+rust-version = "1.85"
+
+[dependencies]
+typosaurus = "0.1"
+

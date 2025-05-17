@@ -128,7 +128,7 @@ mod test {
     };
 
     use super::*;
-    use crate::{fragment, shape, Dyn};
+    use crate::{dynamic::Any, fragment, shape, Dyn};
     use typosaurus::bool::{False, True};
     use typosaurus::collections::list::Idx;
 
@@ -231,8 +231,7 @@ mod test {
     #[allow(unused)]
     #[test]
     fn wild() {
-        struct BatchSize;
-        type B = Dyn<BatchSize>;
+        type B = Dyn<Any>;
         type ShapeA = shape![U1, B, U3];
         type ShapeB = shape![U1, U3, B];
 
@@ -243,8 +242,7 @@ mod test {
     #[allow(unused)]
     #[test]
     fn wild2() {
-        struct BatchSize;
-        type B = Dyn<BatchSize>;
+        type B = Dyn<Any>;
         type ShapeA = shape![U1, U2, B];
         type ShapeB = shape![U1, U3, U2];
 

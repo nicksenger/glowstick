@@ -107,7 +107,7 @@ mod test {
 
     use super::*;
 
-    use crate::{fragment, shape, Dyn};
+    use crate::{dynamic::Any, fragment, shape, Dyn};
 
     #[allow(unused)]
     #[test]
@@ -151,8 +151,7 @@ mod test {
     #[allow(unused)]
     #[test]
     fn wild() {
-        struct BatchSize;
-        type B = Dyn<BatchSize>;
+        type B = Dyn<Any>;
         type MyShape = shape![U1, U1, B, U1];
         type Indices = list![U2, U3, U1, U0];
         assert_type_eq!(<(MyShape, Indices) as IsCompatible>::Out, True);

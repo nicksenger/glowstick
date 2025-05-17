@@ -70,7 +70,7 @@ mod test {
 
     use super::*;
 
-    use crate::{shape, Dyn};
+    use crate::{dynamic::Any, shape, Dyn};
 
     #[allow(unused)]
     #[test]
@@ -93,8 +93,7 @@ mod test {
     #[allow(unused)]
     #[test]
     fn wild() {
-        struct BatchSize;
-        type B = Dyn<BatchSize>;
+        type B = Dyn<Any>;
         type MyShape = shape![U1, U1, B];
         assert_type_eq!(<(MyShape, MyShape) as IsCompatible>::Out, True);
         assert_type_eq!(

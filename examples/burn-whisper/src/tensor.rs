@@ -6,9 +6,9 @@ use burn::{prelude::Backend, tensor::TensorKind};
 
 use glowstick::cmp::{Equal, Greater};
 use glowstick::{
-    Dimension, Dimensioned, Shape, TensorShape,
-    num::{U0, U1, Unsigned},
+    num::{Unsigned, U0, U1},
     op::{broadcast, flatten, matmul, narrow, reshape, squeeze, transmute, transpose, unsqueeze},
+    Dimension, Dimensioned, Shape, TensorShape,
 };
 use glowstick::{IsFragEqual, ShapeFragment};
 

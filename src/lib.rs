@@ -1,5 +1,6 @@
 use core::marker::PhantomData;
 
+use dynamic::Dynamic;
 use typosaurus::num::{
     consts::{U0, U1, U10, U2, U3, U4, U5, U6, U7, U8, U9},
     Bit, NonZero, UInt, Unsigned,
@@ -19,6 +20,7 @@ use typosaurus::{
 
 pub mod cmp;
 pub mod diagnostic;
+pub mod dynamic;
 pub mod num;
 pub mod op;
 use cmp::{IsEqual, IsLess, Max};
@@ -601,8 +603,11 @@ decimpl![
     (U9, _9)
 ];
 pub struct Dec<T>(PhantomData<T>);
-impl<L> DecimalDiagnostic for Dyn<L> {
-    type Out = Dyn<L>;
+impl<L> DecimalDiagnostic for Dyn<L>
+where
+    L: Dynamic,
+{
+    type Out = Dyn<<L as Dynamic>::Label>;
     private_impl!();
 }
 impl<T> DecimalDiagnostic for (Dec<T>, True)
@@ -686,6 +691,9 @@ mod test {
     #[test]
     fn dyn_diag() {
         struct BatchSize;
+        impl Dynamic for BatchSize {
+            type Label = Self;
+        }
         type B = Dyn<BatchSize>;
         type DynShape = shape![U1, U1, B];
         type Diag = <DynShape as ShapeDiagnostic>::Out;

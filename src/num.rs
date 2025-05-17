@@ -1,8 +1,10 @@
+use crate::dynamic::DynAdd;
+use crate::dynamic::DynMul;
 use crate::Dyn;
-use typosaurus::num::{UInt, UTerm};
+use typosaurus::num::UTerm;
 
-pub use typosaurus::num::Unsigned;
 pub use typosaurus::num::consts::*;
+pub use typosaurus::num::{UInt, Unsigned};
 
 pub trait Div {
     type Out;
@@ -45,11 +47,23 @@ impl<L> Add for (UTerm, Dyn<L>) {
 impl<L> Add for (Dyn<L>, UTerm) {
     type Out = Dyn<L>;
 }
-impl<U, B, L> Add for (UInt<U, B>, Dyn<L>) {
-    type Out = Dyn<L>;
+impl<U, B, L> Add for (UInt<U, B>, Dyn<L>)
+where
+    L: DynAdd<UInt<U, B>>,
+{
+    type Out = Dyn<<L as DynAdd<UInt<U, B>>>::Out>;
 }
-impl<U, B, L> Add for (Dyn<L>, UInt<U, B>) {
-    type Out = Dyn<L>;
+impl<U, B, L> Add for (Dyn<L>, UInt<U, B>)
+where
+    L: DynAdd<UInt<U, B>>,
+{
+    type Out = Dyn<<L as DynAdd<UInt<U, B>>>::Out>;
+}
+impl<T, U> Add for (Dyn<T>, Dyn<U>)
+where
+    T: DynAdd<U>,
+{
+    type Out = Dyn<<T as DynAdd<U>>::Out>;
 }
 impl<T, U> Add for (T, U)
 where
@@ -89,11 +103,23 @@ impl<L> Mul for (UTerm, Dyn<L>) {
 impl<L> Mul for (Dyn<L>, UTerm) {
     type Out = UTerm;
 }
-impl<U, B, L> Mul for (UInt<U, B>, Dyn<L>) {
-    type Out = Dyn<L>;
+impl<U, B, L> Mul for (UInt<U, B>, Dyn<L>)
+where
+    L: DynMul<UInt<U, B>>,
+{
+    type Out = Dyn<<L as DynMul<UInt<U, B>>>::Out>;
 }
-impl<U, B, L> Mul for (Dyn<L>, UInt<U, B>) {
-    type Out = Dyn<L>;
+impl<U, B, L> Mul for (Dyn<L>, UInt<U, B>)
+where
+    L: DynMul<UInt<U, B>>,
+{
+    type Out = Dyn<<L as DynMul<UInt<U, B>>>::Out>;
+}
+impl<T, U> Mul for (Dyn<T>, Dyn<U>)
+where
+    T: DynMul<U>,
+{
+    type Out = Dyn<<T as DynMul<U>>::Out>;
 }
 impl<T, U> Mul for (T, U)
 where

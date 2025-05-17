@@ -240,7 +240,7 @@ mod test {
 
     use super::*;
 
-    use crate::{shape, Dyn};
+    use crate::{dynamic::Any, shape, Dyn};
 
     #[allow(unused)]
     #[test]
@@ -279,8 +279,7 @@ mod test {
     #[allow(unused)]
     #[test]
     fn wild() {
-        struct BatchSize;
-        type B = Dyn<BatchSize>;
+        type B = Dyn<Any>;
         type Rhs = shape![U1, U1, U1, B];
         type Lhs = shape![U42, U42, U42, U1];
 
@@ -300,8 +299,7 @@ mod test {
     #[test]
     fn op() {
         use core::marker::PhantomData;
-        struct BatchSize;
-        type B = Dyn<BatchSize>;
+        type B = Dyn<Any>;
         {
             struct Op<'a, T>(&'a T);
             impl<S> Op<'_, PhantomData<S>>

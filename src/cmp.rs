@@ -1,13 +1,18 @@
-use typosaurus::bool::{Bool, Or, True};
-use typosaurus::num::{self, UInt, UTerm};
+use typosaurus::num::{self, Bit, UInt, UTerm, Unsigned};
 
+use crate::dynamic::{DynMax, DynMin, IsDynEqual, IsDynGreater, IsDynLess};
 use crate::Dyn;
+
+pub use typosaurus::bool::{And, Bool, False, Or, True};
 
 pub trait Max {
     type Out;
 }
-impl<L> Max for (Dyn<L>, Dyn<L>) {
-    type Out = Dyn<L>;
+impl<L1, L2> Max for (Dyn<L1>, Dyn<L2>)
+where
+    L1: DynMax<L2>,
+{
+    type Out = Dyn<<L1 as DynMax<L2>>::Out>;
 }
 impl<L> Max for (UTerm, Dyn<L>) {
     type Out = Dyn<L>;
@@ -15,11 +20,21 @@ impl<L> Max for (UTerm, Dyn<L>) {
 impl<L> Max for (Dyn<L>, UTerm) {
     type Out = Dyn<L>;
 }
-impl<U, B, L> Max for (UInt<U, B>, Dyn<L>) {
-    type Out = Dyn<L>;
+impl<U, B, L> Max for (UInt<U, B>, Dyn<L>)
+where
+    U: Unsigned,
+    B: Bit,
+    L: DynMax<UInt<U, B>>,
+{
+    type Out = Dyn<<L as DynMax<UInt<U, B>>>::Out>;
 }
-impl<U, B, L> Max for (Dyn<L>, UInt<U, B>) {
-    type Out = Dyn<L>;
+impl<U, B, L> Max for (Dyn<L>, UInt<U, B>)
+where
+    U: Unsigned,
+    B: Bit,
+    L: DynMax<UInt<U, B>>,
+{
+    type Out = Dyn<<L as DynMax<UInt<U, B>>>::Out>;
 }
 impl<T, U> Max for (T, U)
 where
@@ -31,20 +46,33 @@ where
 pub trait Min {
     type Out;
 }
-impl<L> Min for (Dyn<L>, Dyn<L>) {
-    type Out = Dyn<L>;
+impl<L1, L2> Min for (Dyn<L1>, Dyn<L2>)
+where
+    L1: DynMin<L2>,
+{
+    type Out = Dyn<<L1 as DynMin<L2>>::Out>;
 }
 impl<L> Min for (UTerm, Dyn<L>) {
-    type Out = Dyn<L>;
+    type Out = UTerm;
 }
 impl<L> Min for (Dyn<L>, UTerm) {
-    type Out = Dyn<L>;
+    type Out = UTerm;
 }
-impl<U, B, L> Min for (UInt<U, B>, Dyn<L>) {
-    type Out = Dyn<L>;
+impl<U, B, L> Min for (UInt<U, B>, Dyn<L>)
+where
+    U: Unsigned,
+    B: Bit,
+    L: DynMin<UInt<U, B>>,
+{
+    type Out = Dyn<<L as DynMin<UInt<U, B>>>::Out>;
 }
-impl<U, B, L> Min for (Dyn<L>, UInt<U, B>) {
-    type Out = Dyn<L>;
+impl<U, B, L> Min for (Dyn<L>, UInt<U, B>)
+where
+    U: Unsigned,
+    B: Bit,
+    L: DynMin<UInt<U, B>>,
+{
+    type Out = Dyn<<L as DynMin<UInt<U, B>>>::Out>;
 }
 impl<T, U> Min for (T, U)
 where
@@ -67,8 +95,11 @@ where
 pub trait IsEqual {
     type Out;
 }
-impl<A, B> IsEqual for (Dyn<A>, Dyn<B>) {
-    type Out = True;
+impl<A, B> IsEqual for (Dyn<A>, Dyn<B>)
+where
+    A: IsDynEqual<B>,
+{
+    type Out = <A as IsDynEqual<B>>::Out;
 }
 impl<L> IsEqual for (UTerm, Dyn<L>) {
     type Out = True;
@@ -76,11 +107,17 @@ impl<L> IsEqual for (UTerm, Dyn<L>) {
 impl<L> IsEqual for (Dyn<L>, UTerm) {
     type Out = True;
 }
-impl<U, B, L> IsEqual for (UInt<U, B>, Dyn<L>) {
-    type Out = True;
+impl<U, B, L> IsEqual for (UInt<U, B>, Dyn<L>)
+where
+    L: IsDynEqual<UInt<U, B>>,
+{
+    type Out = <L as IsDynEqual<UInt<U, B>>>::Out;
 }
-impl<U, B, L> IsEqual for (Dyn<L>, UInt<U, B>) {
-    type Out = True;
+impl<U, B, L> IsEqual for (Dyn<L>, UInt<U, B>)
+where
+    L: IsDynEqual<UInt<U, B>>,
+{
+    type Out = <L as IsDynEqual<UInt<U, B>>>::Out;
 }
 impl<T, U> IsEqual for (T, U)
 where
@@ -93,8 +130,11 @@ where
 pub trait IsLess {
     type Out;
 }
-impl<L> IsLess for (Dyn<L>, Dyn<L>) {
-    type Out = True;
+impl<L1, L2> IsLess for (Dyn<L1>, Dyn<L2>)
+where
+    L1: IsDynLess<L2>,
+{
+    type Out = <L1 as IsDynLess<L2>>::Out;
 }
 impl<L> IsLess for (UTerm, Dyn<L>) {
     type Out = True;
@@ -102,11 +142,17 @@ impl<L> IsLess for (UTerm, Dyn<L>) {
 impl<L> IsLess for (Dyn<L>, UTerm) {
     type Out = True;
 }
-impl<U, B, L> IsLess for (UInt<U, B>, Dyn<L>) {
-    type Out = True;
+impl<U, B, L> IsLess for (UInt<U, B>, Dyn<L>)
+where
+    L: IsDynLess<UInt<U, B>>,
+{
+    type Out = <L as IsDynLess<UInt<U, B>>>::Out;
 }
-impl<U, B, L> IsLess for (Dyn<L>, UInt<U, B>) {
-    type Out = True;
+impl<U, B, L> IsLess for (Dyn<L>, UInt<U, B>)
+where
+    L: IsDynLess<UInt<U, B>>,
+{
+    type Out = <L as IsDynLess<UInt<U, B>>>::Out;
 }
 impl<T, U> IsLess for (T, U)
 where
@@ -130,8 +176,11 @@ where
 pub trait IsGreater {
     type Out;
 }
-impl<L> IsGreater for (Dyn<L>, Dyn<L>) {
-    type Out = True;
+impl<L1, L2> IsGreater for (Dyn<L1>, Dyn<L2>)
+where
+    L1: IsDynGreater<L2>,
+{
+    type Out = <L1 as IsDynGreater<L2>>::Out;
 }
 impl<L> IsGreater for (UTerm, Dyn<L>) {
     type Out = True;
@@ -139,11 +188,17 @@ impl<L> IsGreater for (UTerm, Dyn<L>) {
 impl<L> IsGreater for (Dyn<L>, UTerm) {
     type Out = True;
 }
-impl<U, B, L> IsGreater for (UInt<U, B>, Dyn<L>) {
-    type Out = True;
+impl<U, B, L> IsGreater for (UInt<U, B>, Dyn<L>)
+where
+    L: IsDynGreater<UInt<U, B>>,
+{
+    type Out = <L as IsDynGreater<UInt<U, B>>>::Out;
 }
-impl<U, B, L> IsGreater for (Dyn<L>, UInt<U, B>) {
-    type Out = True;
+impl<U, B, L> IsGreater for (Dyn<L>, UInt<U, B>)
+where
+    L: IsDynGreater<UInt<U, B>>,
+{
+    type Out = <L as IsDynGreater<UInt<U, B>>>::Out;
 }
 impl<T, U> IsGreater for (T, U)
 where

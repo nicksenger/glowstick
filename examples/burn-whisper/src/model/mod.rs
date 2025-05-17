@@ -8,22 +8,23 @@ use burn::{
     config::Config,
     module::{Module, Param},
     nn::{
-        self, PaddingConfig1d,
+        self,
         conv::{Conv1d, Conv1dConfig},
+        PaddingConfig1d,
     },
-    tensor::{Distribution, Tensor as BTensor, backend::Backend, module::embedding},
+    tensor::{backend::Backend, module::embedding, Distribution, Tensor as BTensor},
 };
 use cache::TensorCache;
 use glowstick::{
-    Shape2,
-    num::{U0, U1, U2, U3, U6, U32, U64, U80, U384, U448},
+    num::{U0, U1, U2, U3, U32, U384, U448, U6, U64, U80},
+    Shape2, Shape3,
 };
 
 #[allow(unused)]
 use glowstick::debug_tensor;
 
 use crate::shape::*;
-use crate::{expand, flatten, matmul, narrow, softmax, transpose, unsqueeze};
+use crate::{expand, flatten, matmul, narrow, reshape, softmax, transpose, unsqueeze};
 
 pub const MAX_TARGET_POSITIONS: usize = 448;
 

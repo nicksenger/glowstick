@@ -11,5 +11,5 @@ keywords = ["science", "math", "machine-learning", "metaprogramming", "types"]
 rust-version = "1.85"
 
 [dependencies]
-typosaurus = "0.1"
+typosaurus = { path = "../typosaurus" }
 

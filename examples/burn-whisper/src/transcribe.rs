@@ -233,7 +233,7 @@ pub async fn waveforms_to_text<
                     mel_data.as_slice(),
                     &device,
                 )?;
-                let mel = reshape!(mel, Shape3<U1, U80, U3000>)?;
+                let mel = reshape!(mel, [U1, U80, U3000])?;
 
                 Ok::<_, Error>((mel, mel_len))
             })?;

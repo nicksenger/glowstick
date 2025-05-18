@@ -1,3 +1,5 @@
+use core::ops::Add;
+
 use typosaurus::{
     bool::And,
     collections::list::{Empty, List},
@@ -8,7 +10,6 @@ use typosaurus::{
 use crate::{
     cmp::{IsGreater, IsGreaterOrEqual},
     diagnostic::{self, Truthy},
-    num::Add,
     DecimalDiagnostic, Dimension, Dimensioned, Shape, ShapeDiagnostic, ShapeFragment, SkipFragment,
     TakeFragment, TensorShape, IDX,
 };
@@ -19,41 +20,31 @@ impl diagnostic::Operation for Narrow {}
 /// Boolean type operator for `Narrow` compatibility.
 ///
 /// If shape `T` may be narrowed at dim `I` to length `L` starting
-/// from element `S`, then the `Out` associated type of this trait for
-/// `(T, I, S, L) is `True`.
+/// from element 0, then the `Out` associated type of this trait for
+/// `(T, I, L) is `True`.
 /// Otherwise, it is `False`.
 pub trait IsCompatible {
     type Out;
     crate::private!();
 }
-impl<T, I, L, S> IsCompatible for (TensorShape<T>, I, S, L)
+impl<T, I, L> IsCompatible for (TensorShape<T>, I, L)
 where
     TensorShape<T>: Shape + ShapeDiagnostic,
     T: ShapeFragment,
     (<T as ShapeFragment>::Rank, I): IsGreater,
-    (I, U1): Add,
+    I: Add<U1>,
     (TensorShape<T>, I): TakeFragment,
-    (TensorShape<T>, <(I, U1) as Add>::Out): SkipFragment,
+    (TensorShape<T>, <I as Add<U1>>::Output): SkipFragment,
     (TensorShape<T>, I): Dimensioned,
-    (S, L): Add,
-    (
-        <(TensorShape<T>, I) as Dimensioned>::Out,
-        <(S, L) as Add>::Out,
-    ): IsGreaterOrEqual,
+    (<(TensorShape<T>, I) as Dimensioned>::Out, L): IsGreaterOrEqual,
     (
         <(<T as ShapeFragment>::Rank, I) as IsGreater>::Out,
-        <(
-            <(TensorShape<T>, I) as Dimensioned>::Out,
-            <(S, L) as Add>::Out,
-        ) as IsGreaterOrEqual>::Out,
+        <(<(TensorShape<T>, I) as Dimensioned>::Out, L) as IsGreaterOrEqual>::Out,
     ): And,
 {
     type Out = <(
         <(<T as ShapeFragment>::Rank, I) as IsGreater>::Out,
-        <(
-            <(TensorShape<T>, I) as Dimensioned>::Out,
-            <(S, L) as Add>::Out,
-        ) as IsGreaterOrEqual>::Out,
+        <(<(TensorShape<T>, I) as Dimensioned>::Out, L) as IsGreaterOrEqual>::Out,
     ) as And>::Out;
     crate::private_impl!();
 }
@@ -61,16 +52,16 @@ where
 /// Type operator for `Narrow`-compatible shapes.
 ///
 /// If shape `T` may be narrowed on dim `I` to length `L` starting from element
-/// `S`, then the `Out` associated type of this trait for `(T, I, S, L)` is the
+/// 0, then the `Out` associated type of this trait for `(T, I, L)` is the
 /// resulting shape.
 pub trait Compatible {
     type Out: Shape;
     crate::private!();
 }
-impl<T, I, S, L> Compatible for (TensorShape<T>, I, S, L)
+impl<T, I, L> Compatible for (TensorShape<T>, I, L)
 where
-    (TensorShape<T>, I, S, L): IsCompatible,
-    <(TensorShape<T>, I, S, L) as IsCompatible>::Out: Truthy<
+    (TensorShape<T>, I, L): IsCompatible,
+    <(TensorShape<T>, I, L) as IsCompatible>::Out: Truthy<
         Narrow,
         <TensorShape<T> as ShapeDiagnostic>::Out,
         IDX<<I as DecimalDiagnostic>::Out>,
@@ -80,29 +71,25 @@ where
     TensorShape<T>: Shape + ShapeDiagnostic,
     T: ShapeFragment,
     (<T as ShapeFragment>::Rank, I): IsGreater,
-    (I, U1): Add,
+    I: Add<U1>,
     (TensorShape<T>, I): TakeFragment,
-    (TensorShape<T>, <(I, U1) as Add>::Out): SkipFragment,
+    (TensorShape<T>, <I as Add<U1>>::Output): SkipFragment,
     (TensorShape<T>, I): Dimensioned,
-    (S, L): Add,
-    (
-        <(TensorShape<T>, I) as Dimensioned>::Out,
-        <(S, L) as Add>::Out,
-    ): IsGreaterOrEqual,
+    (<(TensorShape<T>, I) as Dimensioned>::Out, L): IsGreaterOrEqual,
     (<(TensorShape<T>, I) as TakeFragment>::Out, List<(L, Empty)>): Mappend,
     (
         <(<(TensorShape<T>, I) as TakeFragment>::Out, List<(L, Empty)>) as Mappend>::Out,
-        <(TensorShape<T>, <(I, U1) as Add>::Out) as SkipFragment>::Out,
+        <(TensorShape<T>, <I as Add<U1>>::Output) as SkipFragment>::Out,
     ): Mappend,
     <(
         <(<(TensorShape<T>, I) as TakeFragment>::Out, List<(L, Empty)>) as Mappend>::Out,
-        <(TensorShape<T>, <(I, U1) as Add>::Out) as SkipFragment>::Out,
+        <(TensorShape<T>, <I as Add<U1>>::Output) as SkipFragment>::Out,
     ) as Mappend>::Out: ShapeFragment,
 {
     type Out = TensorShape<
         <(
             <(<(TensorShape<T>, I) as TakeFragment>::Out, List<(L, Empty)>) as Mappend>::Out,
-            <(TensorShape<T>, <(I, U1) as Add>::Out) as SkipFragment>::Out,
+            <(TensorShape<T>, <I as Add<U1>>::Output) as SkipFragment>::Out,
         ) as Mappend>::Out,
     >;
     crate::private_impl!();
@@ -124,11 +111,8 @@ mod test {
     #[test]
     fn basic() {
         type MyShape = shape![U3, U1, U2];
-        assert_type_eq!(<(MyShape, U0, U1, U2) as IsCompatible>::Out, True);
-        assert_type_eq!(
-            <(MyShape, U0, U1, U2) as Compatible>::Out,
-            shape![U2, U1, U2]
-        );
+        assert_type_eq!(<(MyShape, U0, U2) as IsCompatible>::Out, True);
+        assert_type_eq!(<(MyShape, U0, U2) as Compatible>::Out, shape![U2, U1, U2]);
     }
 
     #[allow(unused)]
@@ -136,15 +120,15 @@ mod test {
     fn wild() {
         type B = Dyn<Any>;
         type MyShape = shape![U1, U42, B, U1];
-        assert_type_eq!(<(MyShape, U1, U6, U6) as IsCompatible>::Out, True);
+        assert_type_eq!(<(MyShape, U1, U6) as IsCompatible>::Out, True);
         assert_type_eq!(
-            <(MyShape, U1, U6, U6) as Compatible>::Out,
+            <(MyShape, U1, U6) as Compatible>::Out,
             shape![U1, U6, B, U1]
         );
 
-        assert_type_eq!(<(MyShape, U2, U6, U2) as IsCompatible>::Out, True);
+        assert_type_eq!(<(MyShape, U2, U2) as IsCompatible>::Out, True);
         assert_type_eq!(
-            <(MyShape, U2, U6, U2) as Compatible>::Out,
+            <(MyShape, U2, U2) as Compatible>::Out,
             shape![U1, U42, U2, U1]
         );
     }

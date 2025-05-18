@@ -1,12 +1,20 @@
 use std::marker::PhantomData;
 
-use typosaurus::bool::{And, Bool, False, True};
+use typosaurus::bool::{And, True};
 use typosaurus::collections::tuple::{self, Tuplify};
-use typosaurus::num::{Bit, Unsigned};
 
-use crate::cmp::{IsEqual, Max, Min};
+use crate::cmp::{IsEqual, Max};
 use crate::num::{Mul, UInt};
 use crate::DecimalDiagnostic;
+
+pub trait Dim {
+    type Id;
+    crate::private!();
+}
+impl<T> Dim for super::Dyn<T> {
+    type Id = Self;
+    crate::private_impl!();
+}
 
 pub trait Dynamic {
     type Label;
@@ -97,6 +105,9 @@ where
 {
     type Out = Term<<(Coeff1, Coeff2) as Max>::Out, <Var1 as DynMax<Var2>>::Out>;
 }
+impl<Coeff1, Var1, U, B> DynMax<UInt<U, B>> for Term<Coeff1, Var1> {
+    type Out = Term<Coeff1, Var1>;
+}
 impl<Coeff, Var, U, B> IsDynEqual<UInt<U, B>> for Term<Coeff, Var> {
     type Out = True;
 }
@@ -120,4 +131,19 @@ where
     Coeff: DecimalDiagnostic,
 {
     type Label = (<Coeff as DecimalDiagnostic>::Out, Var);
+}
+
+// TODO: derive macro probably more appropriate here
+#[macro_export]
+macro_rules! dyndim {
+    [$id:ident <- $label:ident] => {
+        pub struct $label;
+        pub type $id = $crate::Dyn<$crate::dynamic::Term<$crate::num::U1, $label>>;
+        impl $crate::dynamic::IsDynEqual<$label> for $label {
+            type Out = $crate::True;
+        }
+        impl $crate::dynamic::DynMax<$label> for $label {
+            type Out = SequenceLength;
+        }
+    };
 }

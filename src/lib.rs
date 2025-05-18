@@ -28,6 +28,7 @@ use num::{monoid::Multiplication, Add, Div, Rem, Sub};
 pub use typosaurus::assert_type_eq;
 pub use typosaurus::bool::{False, True};
 pub use typosaurus::collections::tuple;
+pub use typosaurus::collections::value_list::List as ValueList;
 pub use typosaurus::collections::{
     array::Arrayify,
     list::{Empty, List as Shp},

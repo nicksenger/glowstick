@@ -1,10 +1,6 @@
-use std::marker::PhantomData;
-use std::ops::Add;
-
-use glowstick::cmp::{And, False, IsEqual, Max, True};
-use glowstick::dynamic::{Any, DynMax, DynMul, IsDynEqual, IsDynGreater, IsDynLess, Term};
-use glowstick::num::{Mul, UInt, U1, U10, U1000, U10000, U150, U240, U300, U5, U865};
-use glowstick::{Arrayify, Dyn, Shape1, Shape2, Shape3, Shape4};
+use glowstick::dynamic::Any;
+use glowstick::num::{U5, U10, U150, U240, U300, U865, U1000, U10000};
+use glowstick::{Dyn, Shape1, Shape2, Shape3, Shape4, dyndim};
 
 use crate::tensor::Tensor;
 use burn::tensor::{Int, Tensor as BurnTensor};
@@ -30,20 +26,5 @@ pub type X = Dyn<Any>;
 pub type Y = Dyn<Any>;
 pub type Z = Dyn<Any>;
 
-pub struct BatchSize;
-pub type BB = Dyn<Term<U1, BatchSize>>;
-impl IsDynEqual<BatchSize> for BatchSize {
-    type Out = True;
-}
-impl DynMax<BatchSize> for BatchSize {
-    type Out = BatchSize;
-}
-
-pub struct SequenceLength;
-pub type L = Dyn<Term<U1, SequenceLength>>;
-impl IsDynEqual<SequenceLength> for SequenceLength {
-    type Out = True;
-}
-impl DynMax<SequenceLength> for SequenceLength {
-    type Out = SequenceLength;
-}
+dyndim!(BB <- BatchSize);
+dyndim!(L <- SequenceLength);

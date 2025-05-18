@@ -8,23 +8,22 @@ use burn::{
     config::Config,
     module::{Module, Param},
     nn::{
-        self,
+        self, PaddingConfig1d,
         conv::{Conv1d, Conv1dConfig},
-        PaddingConfig1d,
     },
-    tensor::{backend::Backend, module::embedding, Distribution, Tensor as BTensor},
+    tensor::{Distribution, Tensor as BTensor, backend::Backend, module::embedding},
 };
 use cache::TensorCache;
 use glowstick::{
-    num::{U0, U1, U2, U3, U32, U384, U448, U6, U64, U80},
-    Shape2, Shape3,
+    Shape2,
+    num::{U0, U1, U2, U3, U6, U32, U64, U80, U384, U448},
 };
 
 #[allow(unused)]
 use glowstick::debug_tensor;
 
 use crate::shape::*;
-use crate::{expand, flatten, matmul, narrow, reshape, softmax, transpose, unsqueeze};
+use crate::{expand, flatten, matmul, narrow, softmax, transpose, unsqueeze};
 
 pub const MAX_TARGET_POSITIONS: usize = 448;
 
@@ -262,12 +261,12 @@ impl<B: Backend> TextDecoder<B> {
         let x = if offset == 0 {
             x
         } else {
-            narrow!(x, U1, offset, U1).transmute()
+            narrow!(x, U1: [{ offset }, U1]).transmute()
         };
 
         let positional_embedding: Rank2Tensor<U448, U384, B> =
             self.positional_embedding.val().try_into()?;
-        let positional_embedding = narrow!(positional_embedding, U0, offset, U1);
+        let positional_embedding = narrow!(positional_embedding, U0: [{ offset }, U1]);
         let positional_embedding = unsqueeze!(positional_embedding, U0);
         let mut x = embedding(self.token_embedding.val(), x.into_inner())
             + positional_embedding.into_inner();
@@ -288,7 +287,7 @@ impl<B: Backend> TextDecoder<B> {
 
         let x: Rank3Tensor<BB, L, U384, B> = self.ln.forward(x).try_into()?;
         let w: Rank2Tensor<U51865, U384, B> = self.token_embedding.val().try_into()?;
-        let w = transpose!(w, U0, U1);
+        let w = transpose!(w, U0:U1);
         let w = unsqueeze!(w, U0);
         let w: Rank3Tensor<BB, U384, U51865, B> =
             w.into_inner().repeat(&[batch_size, 0, 0]).try_into()?;
@@ -379,7 +378,7 @@ impl<B: Backend> AudioEncoder<B> {
         let x: Rank3Tensor<BB, U384, U1500, B> =
             self.gelu2.forward(self.conv2.forward(x)).try_into()?;
 
-        let x = transpose!(x, U1, U2);
+        let x = transpose!(x, U1:U2);
         let positional_embedding: Rank2Tensor<U1500, U384, B> =
             self.positional_embedding.val().try_into()?;
         let positional_embedding = expand!(positional_embedding, &x);
@@ -668,7 +667,7 @@ impl<B: Backend> MultiHeadSelfAttention<B> {
             .reshape([n_batch, n_ctx, self.n_head, n_state / self.n_head])
             .try_into()?;
 
-        Ok(transpose!(reshaped, U1, U2))
+        Ok(transpose!(reshaped, U1:U2))
     }
 
     pub fn qkv_attention(
@@ -682,7 +681,7 @@ impl<B: Backend> MultiHeadSelfAttention<B> {
         let [_, n_ctx, n_state] = q.inner().dims();
         let scale = (n_state as f64 / n_head as f64).powf(-0.25);
         let q = self.reshape_head(q)? * scale;
-        let k = transpose!(self.reshape_head(k)?, U2, U3) * scale;
+        let k = transpose!(self.reshape_head(k)?, U2:U3) * scale;
         let v = self.reshape_head(v)?;
 
         let qk = matmul!(q, k);
@@ -695,7 +694,7 @@ impl<B: Backend> MultiHeadSelfAttention<B> {
         };
         let w = softmax!(qk, U3);
 
-        Ok(flatten!(transpose!(matmul!(w, v), U1, U2), U2, U3))
+        Ok(flatten!(transpose!(matmul!(w, v), U1:U2), [U2,U3]))
     }
 
     fn reset_kv_cache(&mut self) {
@@ -804,7 +803,7 @@ impl<B: Backend> MultiHeadCrossAttention<B> {
             .into_inner()
             .reshape([n_batch, n_ctx, self.n_head, n_state / self.n_head])
             .try_into()?;
-        Ok(transpose!(reshaped, U1, U2))
+        Ok(transpose!(reshaped, U1:U2))
     }
 
     pub fn qkv_attention(
@@ -819,7 +818,7 @@ impl<B: Backend> MultiHeadCrossAttention<B> {
         let scale = (n_state as f64 / n_head as f64).powf(-0.25);
 
         let q = self.reshape_head(q.transmute())? * scale;
-        let k = transpose!(self.reshape_head(k.transmute())?, U2, U3) * scale;
+        let k = transpose!(self.reshape_head(k.transmute())?, U2:U3) * scale;
         let v = self.reshape_head(v.transmute())?;
         let qk = matmul!(q, k);
 
@@ -827,7 +826,7 @@ impl<B: Backend> MultiHeadCrossAttention<B> {
             let _ = out.append(qk.clone().into_inner());
         }
         let w = softmax!(qk, U3);
-        Ok(flatten!(transpose!(matmul!(w, v), U1, U2), U2, U3).transmute())
+        Ok(flatten!(transpose!(matmul!(w, v), U1:U2), [U2,U3]).transmute())
     }
 
     fn reset_kv_cache(&mut self) {

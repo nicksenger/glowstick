@@ -6,11 +6,11 @@ use typosaurus::{
 };
 
 use crate::{
+    DecimalDiagnostic, Dimensioned, Shape, ShapeDiagnostic, ShapeFragment, SkipFragment,
+    TakeFragment, TensorShape,
     cmp::IsGreater,
     diagnostic::{self, Truthy},
     num::{Add, Sub},
-    DecimalDiagnostic, Dimensioned, Shape, ShapeDiagnostic, ShapeFragment, SkipFragment,
-    TakeFragment, TensorShape,
 };
 
 struct Transpose;
@@ -172,7 +172,7 @@ mod test {
 
     use super::*;
 
-    use crate::{dynamic::Any, shape, Dyn};
+    use crate::{Dyn, dynamic::Any, shape};
 
     #[allow(unused)]
     #[test]

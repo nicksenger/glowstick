@@ -5,8 +5,9 @@ use typosaurus::{
 };
 
 use crate::{
+    IsFragEqual, Shape, ShapeDiagnostic, ShapeFragment, TensorShape,
     diagnostic::{self, Truthy},
-    fragment, IsFragEqual, Shape, ShapeDiagnostic, ShapeFragment, TensorShape,
+    fragment,
 };
 
 struct Stack;
@@ -70,7 +71,7 @@ mod test {
 
     use super::*;
 
-    use crate::{dynamic::Any, shape, Dyn};
+    use crate::{Dyn, dynamic::Any, shape};
 
     #[allow(unused)]
     #[test]

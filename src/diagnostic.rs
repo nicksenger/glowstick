@@ -44,8 +44,8 @@ macro_rules! debug_tensor {
         where
             T: $crate::Tensor,
             T: $crate::diagnostic::Diagnostic<
-                <<T as $crate::Tensor>::Shape as $crate::ShapeDiagnostic>::Out,
-            >,
+                    <<T as $crate::Tensor>::Shape as $crate::ShapeDiagnostic>::Out,
+                >,
         {
         }
         diagnostic_msg::<_>(&$t);

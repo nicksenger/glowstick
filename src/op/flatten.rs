@@ -6,11 +6,11 @@ use typosaurus::{
 };
 
 use crate::{
-    cmp::IsGreater,
-    diagnostic::{self, Truthy},
-    num::{monoid::Multiplication, Add, Sub},
     DecimalDiagnostic, Dimensioned, Shape, ShapeDiagnostic, ShapeFragment, SkipFragment,
     TakeFragment, TensorShape,
+    cmp::IsGreater,
+    diagnostic::{self, Truthy},
+    num::{Add, Sub, monoid::Multiplication},
 };
 
 struct Flatten;
@@ -141,12 +141,12 @@ mod test {
     use typosaurus::{
         assert_type_eq,
         bool::True,
-        num::consts::{U0, U1, U12, U2, U24, U3, U4, U6},
+        num::consts::{U0, U1, U2, U3, U4, U6, U12, U24},
     };
 
     use super::*;
 
-    use crate::{dynamic::Any, shape, Dyn};
+    use crate::{Dyn, dynamic::Any, shape};
 
     #[allow(unused)]
     #[test]

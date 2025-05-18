@@ -1,10 +1,12 @@
+use crate::Dyn;
 use crate::dynamic::DynAdd;
 use crate::dynamic::DynMul;
-use crate::Dyn;
+use typosaurus::collections::list::{Empty, List};
 use typosaurus::num::UTerm;
 
 pub use typosaurus::num::consts::*;
 pub use typosaurus::num::{UInt, Unsigned};
+use typosaurus::traits::functor::Mapper;
 
 pub trait Div {
     type Out;
@@ -126,6 +128,54 @@ where
     T: core::ops::Mul<U>,
 {
     type Out = <T as core::ops::Mul<U>>::Output;
+}
+
+pub struct ZipSub;
+impl<T, U> Mapper<List<(T, List<(U, Empty)>)>> for ZipSub
+where
+    (T, U): Sub,
+{
+    type Out = <(T, U) as Sub>::Out;
+}
+pub struct ZipAdd;
+impl<T, U> Mapper<List<(T, List<(U, Empty)>)>> for ZipAdd
+where
+    (T, U): Add,
+{
+    type Out = <(T, U) as Add>::Out;
+}
+pub struct ZipDiv;
+impl<T, U> Mapper<List<(T, List<(U, Empty)>)>> for ZipDiv
+where
+    (T, U): Div,
+{
+    type Out = <(T, U) as Div>::Out;
+}
+pub struct ZipDivAddOne;
+impl<T, U> Mapper<List<(T, List<(U, Empty)>)>> for ZipDivAddOne
+where
+    (T, U): Div,
+    (<(T, U) as Div>::Out, U1): Add,
+{
+    type Out = <(<(T, U) as Div>::Out, U1) as Add>::Out;
+}
+
+// This is tailored to keff calc
+pub struct ZipSubOneMul;
+impl<T, U> Mapper<List<(T, List<(U, Empty)>)>> for ZipSubOneMul
+where
+    (T, U1): Sub,
+    (U, U1): Sub,
+    (<(T, U1) as Sub>::Out, <(U, U1) as Sub>::Out): Mul,
+    (
+        <(<(T, U1) as Sub>::Out, <(U, U1) as Sub>::Out) as Mul>::Out,
+        U,
+    ): Add,
+{
+    type Out = <(
+        <(<(T, U1) as Sub>::Out, <(U, U1) as Sub>::Out) as Mul>::Out,
+        U,
+    ) as Add>::Out;
 }
 
 pub mod monoid {

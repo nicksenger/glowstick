@@ -5,10 +5,10 @@ use typosaurus::{
 };
 
 use crate::{
-    cmp::IsGreaterOrEqual,
-    diagnostic::{self, Truthy},
     DecimalDiagnostic, Shape, ShapeDiagnostic, ShapeFragment, SkipFragment, TakeFragment,
     TensorShape,
+    cmp::IsGreaterOrEqual,
+    diagnostic::{self, Truthy},
 };
 
 struct Unsqueeze;
@@ -53,10 +53,10 @@ where
     (TensorShape<T>, I): IsCompatible,
     I: DecimalDiagnostic,
     <(TensorShape<T>, I) as IsCompatible>::Out: Truthy<
-        Unsqueeze,
-        <TensorShape<T> as crate::ShapeDiagnostic>::Out,
-        crate::IDX<<I as crate::DecimalDiagnostic>::Out>,
-    >,
+            Unsqueeze,
+            <TensorShape<T> as crate::ShapeDiagnostic>::Out,
+            crate::IDX<<I as crate::DecimalDiagnostic>::Out>,
+        >,
     (
         <(TensorShape<T>, I) as TakeFragment>::Out,
         List<(U1, Empty)>,
@@ -98,7 +98,7 @@ mod test {
 
     use super::*;
 
-    use crate::{dynamic::Any, shape, Dyn};
+    use crate::{Dyn, dynamic::Any, shape};
 
     #[allow(unused)]
     #[test]

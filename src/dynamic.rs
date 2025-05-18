@@ -3,9 +3,9 @@ use std::marker::PhantomData;
 use typosaurus::bool::{And, True};
 use typosaurus::collections::tuple::{self, Tuplify};
 
+use crate::DecimalDiagnostic;
 use crate::cmp::{IsEqual, Max};
 use crate::num::{Mul, UInt};
-use crate::DecimalDiagnostic;
 
 pub trait Dim {
     type Id;

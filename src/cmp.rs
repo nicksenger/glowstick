@@ -1,7 +1,7 @@
 use typosaurus::num::{self, Bit, UInt, UTerm, Unsigned};
 
-use crate::dynamic::{DynMax, DynMin, IsDynEqual, IsDynGreater, IsDynLess};
 use crate::Dyn;
+use crate::dynamic::{DynMax, DynMin, IsDynEqual, IsDynGreater, IsDynLess};
 
 pub use typosaurus::bool::{And, Bool, False, Or, True};
 

@@ -4,10 +4,10 @@ use typosaurus::num::consts::U1;
 use typosaurus::{bool::And, traits::semigroup::Mappend};
 
 use crate::{
-    cmp::{IsEqual, IsGreater},
-    diagnostic::{self, Truthy},
     DecimalDiagnostic, Dimensioned, Shape, ShapeDiagnostic, ShapeFragment, SkipFragment,
     TakeFragment, TensorShape,
+    cmp::{IsEqual, IsGreater},
+    diagnostic::{self, Truthy},
 };
 
 struct Squeeze;
@@ -63,10 +63,10 @@ where
     (TensorShape<T>, <I as Add<U1>>::Output): SkipFragment,
     (TensorShape<T>, I): IsCompatible,
     <(TensorShape<T>, I) as IsCompatible>::Out: Truthy<
-        Squeeze,
-        <TensorShape<T> as crate::ShapeDiagnostic>::Out,
-        crate::IDX<<I as crate::DecimalDiagnostic>::Out>,
-    >,
+            Squeeze,
+            <TensorShape<T> as crate::ShapeDiagnostic>::Out,
+            crate::IDX<<I as crate::DecimalDiagnostic>::Out>,
+        >,
     (
         <(TensorShape<T>, I) as TakeFragment>::Out,
         <(TensorShape<T>, <I as Add<U1>>::Output) as SkipFragment>::Out,
@@ -90,12 +90,12 @@ mod test {
     use typosaurus::{
         assert_type_eq,
         bool::{False, True},
-        num::consts::{U0, U1, U1000, U151, U2, U3, U4, U5, U6, U936},
+        num::consts::{U0, U1, U2, U3, U4, U5, U6, U151, U936, U1000},
     };
 
     use super::*;
 
-    use crate::{dynamic::Any, shape, Dyn};
+    use crate::{Dyn, dynamic::Any, shape};
 
     #[allow(unused)]
     #[test]

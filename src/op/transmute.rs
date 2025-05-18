@@ -1,8 +1,8 @@
 use typosaurus::collections::Container;
 
 use crate::{
-    diagnostic::{self, Truthy},
     IsFragEqual, Shape, ShapeDiagnostic, ShapeFragment, TensorShape,
+    diagnostic::{self, Truthy},
 };
 
 struct Transmute;
@@ -55,10 +55,10 @@ where
     U: ShapeFragment + Container,
     (TensorShape<T>, TensorShape<U>): IsCompatible,
     <(TensorShape<T>, TensorShape<U>) as IsCompatible>::Out: Truthy<
-        Transmute,
-        <TensorShape<T> as ShapeDiagnostic>::Out,
-        <TensorShape<U> as ShapeDiagnostic>::Out,
-    >,
+            Transmute,
+            <TensorShape<T> as ShapeDiagnostic>::Out,
+            <TensorShape<U> as ShapeDiagnostic>::Out,
+        >,
 {
     type Out = TensorShape<U>;
     crate::private_impl!();
@@ -74,7 +74,7 @@ mod test {
 
     use super::*;
 
-    use crate::{dynamic::Any, shape, Dyn};
+    use crate::{Dyn, dynamic::Any, shape};
 
     #[allow(unused)]
     #[test]

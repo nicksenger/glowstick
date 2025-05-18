@@ -7,10 +7,10 @@ use typosaurus::{
 };
 
 use crate::{
+    DecimalDiagnostic, Dimensioned, IDX, Shape, ShapeDiagnostic, ShapeFragment, SkipFragment,
+    TakeFragment, TensorShape,
     cmp::IsGreater,
     diagnostic::{self, Truthy},
-    DecimalDiagnostic, Dimensioned, Shape, ShapeDiagnostic, ShapeFragment, SkipFragment,
-    TakeFragment, TensorShape, IDX,
 };
 
 struct Narrow;
@@ -52,11 +52,7 @@ pub trait Compatible {
 impl<T, I, DynDim> Compatible for (TensorShape<T>, I, DynDim)
 where
     (TensorShape<T>, I, DynDim): IsCompatible,
-    <(TensorShape<T>, I, DynDim) as IsCompatible>::Out: Truthy<
-        Narrow,
-        <TensorShape<T> as ShapeDiagnostic>::Out,
-        IDX<<I as DecimalDiagnostic>::Out>,
-    >,
+    <(TensorShape<T>, I, DynDim) as IsCompatible>::Out: Truthy<Narrow, <TensorShape<T> as ShapeDiagnostic>::Out, IDX<<I as DecimalDiagnostic>::Out>>,
     I: DecimalDiagnostic,
     TensorShape<T>: Shape + ShapeDiagnostic,
     T: ShapeFragment,
@@ -106,7 +102,7 @@ mod test {
 
     use super::*;
 
-    use crate::{dynamic::Any, shape, Dyn};
+    use crate::{Dyn, dynamic::Any, shape};
 
     #[allow(unused)]
     #[test]

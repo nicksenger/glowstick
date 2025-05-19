@@ -1,25 +1,20 @@
 use core::marker::PhantomData;
 
 use dynamic::Dynamic;
+use typosaurus::collections::list::{All, Skippable, Takeable};
+use typosaurus::num::{
+    Bit, NonZero, UInt, Unsigned,
+    consts::{U0, U1, U2, U3, U4, U5, U6, U7, U8, U9, U10},
+};
 use typosaurus::{
     bool::{And, Or},
-    collections::{
-        Container,
-        list::{Rev, Reversible},
-    },
+    collections::list::{Rev, Reversible},
     traits::{fold::Foldable, functor::Mapper},
 };
-use typosaurus::{
-    collections::list::Zippable,
-    num::{
-        Bit, NonZero, UInt, Unsigned,
-        consts::{U0, U1, U2, U3, U4, U5, U6, U7, U8, U9, U10},
-    },
-};
-use typosaurus::{
-    collections::list::{All, Indexed, Skippable, Takeable},
-    traits::functor::Map,
-};
+
+pub use typosaurus::collections::Container;
+pub use typosaurus::collections::list::{Indexed, List, Zippable};
+pub use typosaurus::traits::functor::Map;
 
 pub mod cmp;
 pub mod diagnostic;
@@ -37,7 +32,8 @@ pub use typosaurus::collections::{
     list::{Empty, List as Shp},
     tuple::Tuplify,
 };
-use typosaurus::traits::semigroup::Mappend;
+pub use typosaurus::list;
+pub use typosaurus::traits::semigroup::Mappend;
 
 #[macro_export]
 macro_rules! shape {
@@ -755,7 +751,3 @@ mod test {
         assert_type_eq!(Diag, (RANK<_3>, (DIM<_1>, DIM<_1>, DIM<Dyn<BatchSize>>)));
     }
 }
-
-#[doc = include_str!("../README.md")]
-#[cfg(doctest)]
-pub struct ReadmeDoctests;

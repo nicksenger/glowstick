@@ -829,7 +829,7 @@ macro_rules! expand {
         ($t1, $t2).expand()
     }};
     ($t1:expr,$t2:expr,$($t2s:expr),+) => {{
-        $crate::expand![$crate::expand!($t1, $t2),$($t2s),+] 
+        $crate::expand![$crate::expand!($t1, $t2),$($t2s),+]
     }};
 }
 
@@ -840,6 +840,6 @@ macro_rules! matmul {
         ($t1, $t2).matmul()
     }};
     ($t1:expr,$t2:expr,$($t2s:expr),+) => {{
-        $crate::matmul![$crate::matmul!($t1, $t2),$($t2s),+] 
+        $crate::matmul![$crate::matmul!($t1, $t2),$($t2s),+]
     }};
 }

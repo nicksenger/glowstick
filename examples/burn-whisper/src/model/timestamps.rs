@@ -5,10 +5,10 @@ use burn::{
     tensor::{DataError, Tensor as BTensor},
 };
 use glowstick::num::{U1, U2, U3, U6, U32};
+use glowstick_burn::{mean_dim, softmax, var_mean};
 
 use crate::shape::*;
 use crate::{HOP_LENGTH, N_FRAMES, SAMPLE_RATE};
-use crate::{mean_dim, softmax, var_mean};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -19,7 +19,7 @@ pub enum Error {
     Decode,
 
     #[error("Tensor error: {0:?}")]
-    Tensor(#[from] crate::tensor::Error),
+    Tensor(#[from] glowstick_burn::Error),
 }
 type Result<T> = std::result::Result<T, Error>;
 

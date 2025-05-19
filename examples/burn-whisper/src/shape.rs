@@ -1,8 +1,8 @@
 use glowstick::dynamic::Any;
 use glowstick::num::{U5, U10, U150, U240, U300, U865, U1000, U10000};
 use glowstick::{Dyn, Shape1, Shape2, Shape3, Shape4, dyndim};
+use glowstick_burn::Tensor;
 
-use crate::tensor::Tensor;
 use burn::tensor::{Int, Tensor as BurnTensor};
 
 pub type Rank1Tensor<D1, B> = Tensor<BurnTensor<B, 1>, Shape1<D1>>;

@@ -18,12 +18,12 @@ use glowstick::{
     Shape2,
     num::{U0, U1, U2, U3, U6, U32, U64, U80, U384, U448},
 };
+use glowstick_burn::{expand, flatten, matmul, narrow, softmax, transpose, unsqueeze};
 
 #[allow(unused)]
 use glowstick::debug_tensor;
 
 use crate::shape::*;
-use crate::{expand, flatten, matmul, narrow, softmax, transpose, unsqueeze};
 
 pub const MAX_TARGET_POSITIONS: usize = 448;
 
@@ -36,7 +36,7 @@ pub enum Error {
     Timestamps(#[from] timestamps::Error),
 
     #[error("Tensor error: {0}")]
-    Tensor(#[from] crate::tensor::Error),
+    Tensor(#[from] glowstick_burn::Error),
 }
 
 #[derive(Config, Debug)]
@@ -694,7 +694,7 @@ impl<B: Backend> MultiHeadSelfAttention<B> {
         };
         let w = softmax!(qk, U3);
 
-        Ok(flatten!(transpose!(matmul!(w, v), U1:U2), [U2,U3]))
+        Ok(flatten!(transpose!(matmul!(w, v), U1:U2), [U2, U3]))
     }
 
     fn reset_kv_cache(&mut self) {
@@ -826,7 +826,7 @@ impl<B: Backend> MultiHeadCrossAttention<B> {
             let _ = out.append(qk.clone().into_inner());
         }
         let w = softmax!(qk, U3);
-        Ok(flatten!(transpose!(matmul!(w, v), U1:U2), [U2,U3]).transmute())
+        Ok(flatten!(transpose!(matmul!(w, v), U1:U2), [U2, U3]).transmute())
     }
 
     fn reset_kv_cache(&mut self) {

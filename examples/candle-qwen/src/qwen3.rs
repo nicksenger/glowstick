@@ -8,14 +8,15 @@ use glowstick::{
     num::{U0, U1, U1024, U12, U128, U16, U2, U2048, U3, U8},
     Shape2, Shape3, Shape4,
 };
+use glowstick_candle::tensor::Tensor;
+use glowstick_candle::{broadcast_add, flatten, matmul, narrow, reshape, transpose};
 use std::sync::Arc;
 
 #[allow(unused)]
 use glowstick::debug_tensor;
 
+use super::Error;
 use crate::shape::*;
-use crate::tensor::Tensor;
-use crate::{broadcast_add, flatten, matmul, narrow, reshape, transpose, Error};
 
 #[derive(Debug, Clone, PartialEq, serde::Deserialize)]
 pub struct Config {
@@ -256,7 +257,7 @@ impl Qwen3Attention {
         // 8. Output proj
         let ctx = transpose!(&ctx, U1:U2)?;
         let ctx = reshape!(&ctx, [U1, () => L, U2048])?;
-        ctx.inner().apply(&self.o_proj)?.try_into()
+        Ok(ctx.inner().apply(&self.o_proj)?.try_into()?)
     }
 
     pub(crate) fn clear_kv_cache(&mut self) {
@@ -301,7 +302,7 @@ impl DecoderLayer {
         let x = (x + h)?;
         let h2: Tensor<Shape3<U1, L, U1024>> = self.ln2.forward(x.inner())?.try_into()?;
         let h2: Tensor<Shape3<U1, L, U1024>> = h2.inner().apply(&self.mlp)?.try_into()?;
-        &x + h2
+        Ok((&x + h2)?)
     }
 
     fn clear_kv_cache(&mut self) {
@@ -367,9 +368,11 @@ impl Model {
                 })
             })
             .collect();
-        candle::Tensor::from_slice(&mask, (b, 1, tgt, tgt + offset), &self.device)?
-            .to_dtype(self.dtype)?
-            .try_into()
+        Ok(
+            candle::Tensor::from_slice(&mask, (b, 1, tgt, tgt + offset), &self.device)?
+                .to_dtype(self.dtype)?
+                .try_into()?,
+        )
     }
 
     pub fn forward(
@@ -389,7 +392,7 @@ impl Model {
         for layer in &mut self.layers {
             h = layer.forward(&h, causal.as_ref(), offset)?;
         }
-        self.norm.forward(h.inner())?.try_into()
+        Ok(self.norm.forward(h.inner())?.try_into()?)
     }
 }
 
@@ -418,7 +421,7 @@ impl ModelForCausalLM {
         let (_, l) = input.dims2()?;
         let t = self.base.forward(input, offset)?;
         let t = narrow!(&t, U1: [l - 1, U1])?;
-        t.inner().apply(&self.lm_head)?.try_into()
+        Ok(t.inner().apply(&self.lm_head)?.try_into()?)
     }
 
     #[allow(unused)]

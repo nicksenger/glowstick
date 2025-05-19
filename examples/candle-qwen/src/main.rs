@@ -8,16 +8,16 @@ use glowstick::{
     num::{U0, U1},
     Shape3,
 };
+use glowstick_candle::squeeze;
+use glowstick_candle::tensor::Tensor;
 use hf_hub::{api::sync::Api, Repo, RepoType};
 use tokenizers::Tokenizer;
 
 mod qwen3;
 mod shape;
-mod tensor;
 
 use qwen3::{Config as Config3, ModelForCausalLM as Model3};
 use shape::*;
-use tensor::Tensor;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -33,6 +33,9 @@ pub enum Error {
 
     #[error("{0}")]
     Candle(#[from] candle::Error),
+
+    #[error("glowstick error: {0}")]
+    Glowstick(#[from] glowstick_candle::Error),
 }
 
 enum Model {

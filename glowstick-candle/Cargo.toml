@@ -1,0 +1,16 @@
+[package]
+name = "glowstick-candle"
+description = "Integration of glowstick with the candle tensor"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+categories.workspace = true
+keywords.workspace = true
+
+[dependencies]
+candle.workspace = true
+glowstick.workspace = true
+thiserror.workspace = true
+

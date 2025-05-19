@@ -125,7 +125,7 @@ where
 mod test {
     use typosaurus::{
         assert_type_eq,
-        bool::{True, False},
+        bool::{False, True},
         num::consts::{U0, U1, U2, U4, U6, U8},
     };
 
@@ -143,9 +143,15 @@ mod test {
             shape![U2, U8, U6, U8]
         );
         assert_type_eq!(<(MyShape, U0, U4, U0) as IsCompatible>::Out, True);
-        assert_type_eq!(<(MyShape, U0, U4, U0) as Compatible>::Out, shape![U6, U4, U6, U8]);
+        assert_type_eq!(
+            <(MyShape, U0, U4, U0) as Compatible>::Out,
+            shape![U6, U4, U6, U8]
+        );
         assert_type_eq!(<(MyShape, U2, U0, U2) as IsCompatible>::Out, True);
-        assert_type_eq!(<(MyShape, U2, U0, U2) as Compatible>::Out, shape![U2, U4, U8, U8]);
+        assert_type_eq!(
+            <(MyShape, U2, U0, U2) as Compatible>::Out,
+            shape![U2, U4, U8, U8]
+        );
 
         assert_type_eq!(<(MyShape, U6, U2, U2) as IsCompatible>::Out, False);
         assert_type_eq!(<(MyShape, U8, U0, U0) as IsCompatible>::Out, False);

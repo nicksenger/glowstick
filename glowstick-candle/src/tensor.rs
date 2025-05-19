@@ -1,17 +1,31 @@
 use std::{borrow::Borrow, marker::PhantomData};
 
-use candle::{shape::ShapeWithOneHole, DType, Device};
+use candle::{DType, Device, shape::ShapeWithOneHole};
 
 use glowstick::{
+    Shape, TensorShape,
     num::Unsigned,
     op::{
         broadcast, flatten, matmul, narrow, narrow_dyn, narrow_dyn_start, reshape, squeeze,
         transpose, unsqueeze,
     },
-    Shape, TensorShape,
 };
 
-use crate::Error;
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error("Rank mismatch: runtime ({runtime}) vs type-level ({type_level})")]
+    RankMismatch { runtime: usize, type_level: usize },
+
+    #[error("Dimension mismatch: expected {type_level} for dim {dim} but received {runtime}")]
+    DimensionMismatch {
+        dim: usize,
+        runtime: usize,
+        type_level: usize,
+    },
+
+    #[error("{0}")]
+    Candle(#[from] candle::Error),
+}
 
 #[allow(unused)]
 pub struct Tensor<S: Shape>(candle::Tensor, PhantomData<S>);
@@ -112,16 +126,26 @@ pub trait Squeeze {
     type Out;
     fn squeeze(&self) -> Self::Out;
 }
-impl<T, S, Dim> Squeeze for (T, PhantomData<S>, PhantomData<Dim>)
+impl<S, Dim> Squeeze for (&Tensor<S>, PhantomData<Dim>)
 where
-    T: Borrow<Tensor<S>>,
     S: Shape,
     Dim: Unsigned,
     (S, Dim): squeeze::Compatible,
 {
     type Out = Result<Tensor<<(S, Dim) as squeeze::Compatible>::Out>, Error>;
     fn squeeze(&self) -> Self::Out {
-        self.0.borrow().inner().squeeze(<Dim as Unsigned>::USIZE)?.try_into()
+        self.0.inner().squeeze(<Dim as Unsigned>::USIZE)?.try_into()
+    }
+}
+impl<S, Dim> Squeeze for (Tensor<S>, PhantomData<Dim>)
+where
+    S: Shape,
+    Dim: Unsigned,
+    (S, Dim): squeeze::Compatible,
+{
+    type Out = Result<Tensor<<(S, Dim) as squeeze::Compatible>::Out>, Error>;
+    fn squeeze(&self) -> Self::Out {
+        self.0.inner().squeeze(<Dim as Unsigned>::USIZE)?.try_into()
     }
 }
 
@@ -130,9 +154,8 @@ pub trait Unsqueeze {
     type Out;
     fn unsqueeze(&self) -> Self::Out;
 }
-impl<T, S, Dim> Unsqueeze for (T, PhantomData<S>, PhantomData<Dim>)
+impl<S, Dim> Unsqueeze for (&Tensor<S>, PhantomData<Dim>)
 where
-    T: Borrow<Tensor<S>>,
     S: Shape,
     Dim: Unsigned,
     (S, Dim): unsqueeze::Compatible,
@@ -140,7 +163,20 @@ where
     type Out = Result<Tensor<<(S, Dim) as unsqueeze::Compatible>::Out>, Error>;
     fn unsqueeze(&self) -> Self::Out {
         self.0
-            .borrow()
+            .inner()
+            .unsqueeze(<Dim as Unsigned>::USIZE)?
+            .try_into()
+    }
+}
+impl<S, Dim> Unsqueeze for (Tensor<S>, PhantomData<Dim>)
+where
+    S: Shape,
+    Dim: Unsigned,
+    (S, Dim): unsqueeze::Compatible,
+{
+    type Out = Result<Tensor<<(S, Dim) as unsqueeze::Compatible>::Out>, Error>;
+    fn unsqueeze(&self) -> Self::Out {
+        self.0
             .inner()
             .unsqueeze(<Dim as Unsigned>::USIZE)?
             .try_into()
@@ -186,7 +222,8 @@ pub trait NarrowDynStart {
     type Out;
     fn narrow_dyn_start(&self) -> Self::Out;
 }
-impl<T, S, Dim, Len> NarrowDynStart for (T, PhantomData<S>, PhantomData<Dim>, usize, PhantomData<Len>)
+impl<T, S, Dim, Len> NarrowDynStart
+    for (T, PhantomData<S>, PhantomData<Dim>, usize, PhantomData<Len>)
 where
     T: Borrow<Tensor<S>>,
     S: Shape,
@@ -196,7 +233,8 @@ where
 {
     type Out = Result<Tensor<<(S, Dim, Len) as narrow_dyn_start::Compatible>::Out>, Error>;
     fn narrow_dyn_start(&self) -> Self::Out {
-        self.0.borrow()
+        self.0
+            .borrow()
             .inner()
             .narrow(<Dim as Unsigned>::USIZE, self.3, <Len as Unsigned>::USIZE)?
             .try_into()
@@ -328,7 +366,10 @@ where
 {
     type Out = Result<Tensor<<(S1, S2) as broadcast::Compatible>::Out>, Error>;
     fn broadcast_add(&self) -> Self::Out {
-        self.0.inner().broadcast_add(self.1.borrow().inner())?.try_into()
+        self.0
+            .inner()
+            .broadcast_add(self.1.borrow().inner())?
+            .try_into()
     }
 }
 impl<S1, S2> BroadcastAdd for (Tensor<S1>, &Tensor<S2>)
@@ -350,7 +391,10 @@ where
 {
     type Out = Result<Tensor<<(S1, S2) as broadcast::Compatible>::Out>, Error>;
     fn broadcast_add(&self) -> Self::Out {
-        self.0.inner().broadcast_add(self.1.borrow().inner())?.try_into()
+        self.0
+            .inner()
+            .broadcast_add(self.1.borrow().inner())?
+            .try_into()
     }
 }
 impl<S1, S2> BroadcastAdd for (&Tensor<S1>, &Tensor<S2>)
@@ -378,7 +422,10 @@ where
 {
     type Out = Result<Tensor<TensorShape<<(S1, S2) as matmul::Compatible>::Out>>, Error>;
     fn matmul(self) -> Self::Out {
-        self.0.into_inner().matmul(self.1.borrow().inner())?.try_into()
+        self.0
+            .into_inner()
+            .matmul(self.1.borrow().inner())?
+            .try_into()
     }
 }
 impl<S1, U, S2> Matmul for (&Tensor<S1>, U, PhantomData<S2>)
@@ -398,11 +445,13 @@ where
 macro_rules! squeeze {
     [$t:expr,$i:ty] => {{
         use $crate::tensor::Squeeze;
-        ($t, std::marker::PhantomData, std::marker::PhantomData::<$i>).squeeze()
+        ($t, std::marker::PhantomData::<$i>).squeeze()
     }};
-    [$t:expr,$i:ty,$($is:ty),+] => {
-        $crate::squeeze![&$crate::squeeze![$t, $i]?, $($is),+]
-    };
+    [$t:expr,$i:ty,$($is:ty),+] => {{
+        use $crate::tensor::Squeeze;
+        ($t, std::marker::PhantomData::<$i>).squeeze()
+            .and_then(|t| $crate::squeeze![t, $($is),+])
+    }};
 }
 
 #[macro_export]
@@ -411,9 +460,11 @@ macro_rules! unsqueeze {
         use $crate::tensor::Unsqueeze;
         ($t, std::marker::PhantomData::<$i>).unsqueeze()
     }};
-    [$t:expr,$i:ty,$($is:ty),+] => {
-        $crate::unsqueeze![&$crate::unsqueeze![$t, $i]?, $($is),+]
-    };
+    [$t:expr,$i:ty,$($is:ty),+] => {{
+        use $crate::tensor::Unsqueeze;
+        ($t, std::marker::PhantomData::<$i>).unsqueeze()
+            .and_then(|t| $crate::unsqueeze![t, $($is),+])
+    }};
 }
 
 #[macro_export]
@@ -422,6 +473,7 @@ macro_rules! narrow {
         use $crate::tensor::Narrow;
         (
             $t,
+            std::marker::PhantomData,
             std::marker::PhantomData::<$d>,
             std::marker::PhantomData::<$s>,
             std::marker::PhantomData::<$l>
@@ -601,6 +653,8 @@ macro_rules! matmul {
     }};
     ($t1:expr,$t2:expr,$($t2s:expr),+) => {{
         use $crate::tensor::Matmul;
-        ($t1, $t2, std::marker::PhantomData).matmul().and_then(|t| $crate::matmul!(&t, $t2s))
+        ($t1, $t2, std::marker::PhantomData)
+            .matmul()
+            .and_then(|t| $crate::matmul!(&t, $t2s))
     }};
 }

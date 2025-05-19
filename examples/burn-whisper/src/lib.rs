@@ -16,7 +16,6 @@ pub mod helper;
 pub mod model;
 pub mod pcm_decode;
 pub mod shape;
-pub mod tensor;
 pub mod token;
 pub mod transcribe;
 

@@ -90,7 +90,7 @@ mod test {
     use typosaurus::{
         assert_type_eq,
         bool::{False, True},
-        num::consts::{U0, U1, U2, U3, U4, U5, U6, U151, U936, U1000},
+        num::consts::{U0, U1, U2, U3, U4, U5, U6, U64, U151, U936, U1000},
     };
 
     use super::*;
@@ -129,6 +129,12 @@ mod test {
         pub type Logits = shape![U1, U1, U151936];
         assert_type_eq!(<(Logits, U0) as IsCompatible>::Out, True);
         assert_type_eq!(<(Logits, U0) as Compatible>::Out, shape![U1, U151936]);
+
+        type Test = shape![U1, U64, U1];
+        assert_type_eq!(<(Test, U0) as IsCompatible>::Out, True);
+        assert_type_eq!(<(Test, U0) as Compatible>::Out, shape![U64, U1]);
+        assert_type_eq!(<(Test, U2) as IsCompatible>::Out, True);
+        assert_type_eq!(<(Test, U2) as Compatible>::Out, shape![U1, U64]);
     }
 
     #[allow(unused)]

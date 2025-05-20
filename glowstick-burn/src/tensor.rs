@@ -1,14 +1,17 @@
 use std::marker::PhantomData;
 
 use burn::tensor::activation::{log_softmax, softmax};
-use burn::tensor::{BasicOps, Int, RangesArg, Tensor as BTensor, TensorData};
+use burn::tensor::{BasicOps, Int, RangesArg, ReshapeArgs, Tensor as BTensor, TensorData};
 use burn::{prelude::Backend, tensor::TensorKind};
 
 use glowstick::cmp::{Equal, Greater};
 use glowstick::{
     Dimension, Dimensioned, Shape, TensorShape,
     num::{U0, U1, Unsigned},
-    op::{broadcast, flatten, matmul, narrow, reshape, squeeze, transmute, transpose, unsqueeze},
+    op::{
+        broadcast, flatten, matmul, narrow, narrow_dyn, narrow_dyn_start, reshape, squeeze,
+        transmute, transpose, unsqueeze,
+    },
 };
 use glowstick::{IsFragEqual, ShapeFragment};
 
@@ -317,9 +320,9 @@ where
     B: Backend,
     S: Shape,
     Dim: Unsigned,
-    (S, Dim, U1): narrow::Compatible,
+    (S, Dim, U0, U1): narrow::Compatible,
 {
-    type Out = Tensor<BTensor<B, N>, <(S, Dim, U1) as narrow::Compatible>::Out>;
+    type Out = Tensor<BTensor<B, N>, <(S, Dim, U0, U1) as narrow::Compatible>::Out>;
     fn mean_dim(self) -> Self::Out {
         Tensor(
             self.0.into_inner().mean_dim(<Dim as Unsigned>::USIZE),
@@ -385,11 +388,11 @@ pub trait Narrow {
     type Out;
     fn narrow(self) -> Self::Out;
 }
-impl<B, Dtype, S, Dim, Len, const N: usize> Narrow
+impl<B, Dtype, S, Dim, Start, Len, const N: usize> Narrow
     for (
         Tensor<BTensor<B, N, Dtype>, S>,
         PhantomData<Dim>,
-        usize,
+        PhantomData<Start>,
         PhantomData<Len>,
     )
 where
@@ -398,10 +401,43 @@ where
     S: Shape,
     Dim: Unsigned,
     Len: Unsigned,
-    (S, Dim, Len): narrow::Compatible,
+    Start: Unsigned,
+    (S, Dim, Start, Len): narrow::Compatible,
 {
-    type Out = Tensor<BTensor<B, N, Dtype>, <(S, Dim, Len) as narrow::Compatible>::Out>;
+    type Out = Tensor<BTensor<B, N, Dtype>, <(S, Dim, Start, Len) as narrow::Compatible>::Out>;
     fn narrow(self) -> Self::Out {
+        Tensor(
+            self.0.into_inner().narrow(
+                <Dim as glowstick::num::Unsigned>::USIZE,
+                <Start as glowstick::num::Unsigned>::USIZE,
+                <Len as glowstick::num::Unsigned>::USIZE,
+            ),
+            PhantomData,
+        )
+    }
+}
+
+pub trait NarrowDynStart<const N: usize> {
+    type Out;
+    fn narrow_dyn_start(self) -> Self::Out;
+}
+impl<B, Dtype, S, Dim, Len, const N: usize> NarrowDynStart<N>
+    for (
+        Tensor<BTensor<B, N, Dtype>, S>,
+        PhantomData<Dim>,
+        usize,
+        PhantomData<Len>,
+    )
+where
+    S: Shape,
+    B: Backend,
+    Dtype: TensorKind<B> + BasicOps<B>,
+    Dim: Unsigned,
+    Len: Unsigned,
+    (S, Dim, Len): narrow_dyn_start::Compatible,
+{
+    type Out = Tensor<BTensor<B, N, Dtype>, <(S, Dim, Len) as narrow_dyn_start::Compatible>::Out>;
+    fn narrow_dyn_start(self) -> Self::Out {
         Tensor(
             self.0.into_inner().narrow(
                 <Dim as glowstick::num::Unsigned>::USIZE,
@@ -413,26 +449,53 @@ where
     }
 }
 
-pub trait Reshape<const M: usize> {
+pub trait NarrowDyn {
     type Out;
-    fn reshape(self) -> Self::Out;
+    fn narrow_dyn(self) -> Self::Out;
 }
-impl<B, S1, S2, const N: usize, const M: usize> Reshape<M>
+impl<B, Dtype, S, Dim, DynDim, const N: usize> NarrowDyn
+    for (
+        Tensor<BTensor<B, N, Dtype>, S>,
+        PhantomData<Dim>,
+        PhantomData<DynDim>,
+        usize,
+        usize,
+    )
+where
+    B: Backend,
+    S: Shape,
+    Dtype: TensorKind<B> + BasicOps<B>,
+    Dim: Unsigned,
+    (S, Dim, DynDim): narrow_dyn::Compatible,
+{
+    type Out = Tensor<BTensor<B, N, Dtype>, <(S, Dim, DynDim) as narrow_dyn::Compatible>::Out>;
+    fn narrow_dyn(self) -> Self::Out {
+        Tensor(
+            self.0
+                .into_inner()
+                .narrow(<Dim as glowstick::num::Unsigned>::USIZE, self.3, self.4),
+            PhantomData,
+        )
+    }
+}
+
+pub trait Reshape<Args, const M: usize> {
+    type Out;
+    fn reshape(self, args: Args) -> Self::Out;
+}
+impl<B, S1, S2, Args, const N: usize, const M: usize> Reshape<Args, M>
     for (Tensor<BTensor<B, N>, S1>, PhantomData<TensorShape<S2>>)
 where
+    Args: ReshapeArgs<M>,
     B: Backend,
     S1: Shape,
     TensorShape<S2>: Shape,
     S2: ShapeFragment,
-    S2: glowstick::Arrayify<usize, Out = [usize; M]>,
     (S1, TensorShape<S2>): reshape::Compatible,
 {
     type Out = Result<Tensor<BTensor<B, M>, TensorShape<S2>>, Error>;
-    fn reshape(self) -> Self::Out {
-        self.0
-            .into_inner()
-            .reshape(<S2 as glowstick::Arrayify<usize>>::value())
-            .try_into()
+    fn reshape(self, args: Args) -> Self::Out {
+        self.0.into_inner().reshape(args).try_into()
     }
 }
 
@@ -560,6 +623,9 @@ macro_rules! var_mean {
         use $crate::tensor::VarMean;
         ($t, std::marker::PhantomData::<$i>).var_mean()
     }};
+    [$t:expr,$i:ty,$($is:ty),+] => {{
+        $crate::var_mean![$crate::var_mean![$t,$i],$($is),+]
+    }};
 }
 
 #[macro_export]
@@ -567,6 +633,9 @@ macro_rules! mean_dim {
     [$t:expr,$i:ty] => {{
         use $crate::tensor::MeanDim;
         ($t, std::marker::PhantomData::<$i>).mean_dim()
+    }};
+    [$t:expr,$i:ty,$($is:ty),+] => {{
+        $crate::mean_dim![$crate::mean_dim![$t,$i],$($is),+]
     }};
 }
 
@@ -594,29 +663,122 @@ macro_rules! unsqueeze {
 
 #[macro_export]
 macro_rules! narrow {
-    ($t:expr,$d:ty,$s:expr,$l:ty) => {{
+    ($t:expr,$d:ty:[$s:ty,$l:ty]) => {{
         use $crate::tensor::Narrow;
+        (
+            $t,
+            std::marker::PhantomData::<$d>,
+            std::marker::PhantomData::<$s>,
+            std::marker::PhantomData::<$l>
+        ).narrow()
+    }};
+    ($t:expr,$d:ty:[$s:expr,$l:ty]) => {{
+        use $crate::tensor::NarrowDynStart;
         (
             $t,
             std::marker::PhantomData::<$d>,
             $s,
             std::marker::PhantomData::<$l>,
         )
-            .narrow()
+            .narrow_dyn_start()
+    }};
+    ($t:expr,$d:ty:[$s:expr,$l:expr] => $y:ty) => {{
+        use $crate::tensor::NarrowDyn;
+        (
+            $t,
+            std::marker::PhantomData::<$d>,
+            std::marker::PhantomData::<$y>,
+            $s,
+            $l,
+        )
+            .narrow_dyn()
+    }};
+    ($t:expr,$d:ty:[$s:ty,$l:ty],$($ds:tt)+) => {{
+        use $crate::tensor::Narrow;
+        (
+            $t,
+            std::marker::PhantomData::<$d>,
+            std::marker::PhantomData::<$s>,
+            std::marker::PhantomData::<$l>,
+        )
+            .narrow().and_then(|t| $crate::narrow!(&t,$($ds)+))
+    }};
+    ($t:expr,$d:ty:[$s:expr,$l:ty],$($ds:tt)+) => {{
+        use $crate::tensor::NarrowDynStart;
+        (
+            $t,
+            std::marker::PhantomData::<$d>,
+            $s,
+            std::marker::PhantomData::<$l>,
+        )
+            .narrow_dyn_start().and_then(|t| $crate::narrow!(&t,$($ds)+))
+    }};
+    ($t:expr,$d:ty:[$s:expr,$l:expr] => $y:ty,$($ds:tt)+) => {{
+        use $crate::tensor::NarrowDyn;
+        (
+            $t,
+            std::marker::PhantomData::<$d>,
+            std::marker::PhantomData::<$y>,
+            $s,
+            $l,
+        )
+            .narrow_dyn().and_then(|t| $crate::narrow!(&t,$($ds)+))
     }};
 }
 
 #[macro_export]
 macro_rules! reshape {
-    ($t:expr,$s:ty) => {{
+    ($t:expr,[$e:expr => $d:ty,$($ds:tt)*]) => {{
         use $crate::tensor::Reshape;
-        ($t, std::marker::PhantomData::<$s>).reshape()
+        (
+            $t,
+            std::marker::PhantomData::<glowstick::TensorShape<$crate::reshape_tys!($e => $d,$($ds)+)>>,
+        )
+            .reshape($crate::reshape_val!($d => $e,$($ds)+).into_array())
     }};
+    ($t:expr,[$($ds:tt)+]) => {{
+        use $crate::tensor::Reshape;
+        (
+            $t,
+            std::marker::PhantomData::<glowstick::TensorShape<$crate::reshape_tys!($($ds)+)>>,
+        )
+            .reshape($crate::reshape_val!($($ds)+).into_array())
+    }};
+}
+#[macro_export]
+macro_rules! reshape_tys {
+    ($e:expr => $d:ty) => {
+        glowstick::Shp<(<$d as glowstick::dynamic::Dim>::Id, glowstick::Empty)>
+    };
+    ($e:expr => $d:ty,$($ds:tt)+) => {
+        glowstick::Shp<(<$d as glowstick::dynamic::Dim>::Id, $crate::reshape_tys!($($ds)+))>
+    };
+    ($d:ty) => {
+        glowstick::Shp<($d, glowstick::Empty)>
+    };
+    ($d:ty,$($ds:tt)+) => {
+        glowstick::Shp<($d, $crate::reshape_tys!($($ds)+))>
+    };
+}
+#[macro_export]
+macro_rules! reshape_val {
+    ($e:expr => $d:ty) => {
+        glowstick::ValueList(($e, glowstick::ValueList(())))
+    };
+    ($d:ty) => {
+        glowstick::ValueList((<$d as glowstick::num::Unsigned>::USIZE,glowstick::ValueList(())))
+    };
+    ($e:expr => $d:ty,$($ds:tt)+) => {
+        glowstick::ValueList(($e,$crate::reshape_val!($($ds)+)))
+    };
+    ($d:ty,$($ds:tt)+) => {
+        glowstick::ValueList((<$d as glowstick::num::Unsigned>::USIZE,$crate::reshape_val!($($ds)+)))
+    };
 }
 
 #[macro_export]
 macro_rules! transpose {
-    ($t:expr,$d1:ty,$d2:ty) => {{
+    ($t:expr,$d1:ty:$d2:ty) => {{
         use $crate::tensor::Transpose;
         (
             $t,
@@ -625,11 +787,20 @@ macro_rules! transpose {
         )
             .transpose()
     }};
+    ($t:expr,$d1:ty:$d2:ty,$($d1s:ty:$d2s:ty),+) => {{
+        use $crate::tensor::Transpose;
+        (
+            $t,
+            std::marker::PhantomData::<$d1>,
+            std::marker::PhantomData::<$d2>,
+        )
+            .transpose().and_then(|t| $crate::transpose!(&t, $($d1s:$d2s),+))
+    }};
 }
 
 #[macro_export]
 macro_rules! flatten {
-    ($t:expr,$d1:ty,$d2:ty) => {{
+    ($t:expr,[$d1:ty,$d2:ty]) => {{
         use $crate::tensor::Flatten;
         (
             $t,
@@ -637,6 +808,17 @@ macro_rules! flatten {
             std::marker::PhantomData::<$d2>,
         )
             .flatten()
+    }};
+    ($t:expr,[$d1:ty,$d2:ty],$([$d1s:ty,$d2s:ty]),+) => {{
+        use $crate::tensor::Flatten;
+        let t = (
+            $t,
+            std::marker::PhantomData::<$d1>,
+            std::marker::PhantomData::<$d2>,
+        )
+            .flatten();
+
+        $crate::flatten!(&t, $([$d1s,$d2s]),+)
     }};
 }
 
@@ -646,6 +828,9 @@ macro_rules! expand {
         use $crate::tensor::Expand;
         ($t1, $t2).expand()
     }};
+    ($t1:expr,$t2:expr,$($t2s:expr),+) => {{
+        $crate::expand![$crate::expand!($t1, $t2),$($t2s),+]
+    }};
 }
 
 #[macro_export]
@@ -653,5 +838,8 @@ macro_rules! matmul {
     ($t1:expr,$t2:expr) => {{
         use $crate::tensor::Matmul;
         ($t1, $t2).matmul()
+    }};
+    ($t1:expr,$t2:expr,$($t2s:expr),+) => {{
+        $crate::matmul![$crate::matmul!($t1, $t2),$($t2s),+]
     }};
 }

@@ -1,8 +1,8 @@
 use typosaurus::collections::Container;
 
 use crate::{
-    diagnostic::{self, Truthy},
     IsFragEqual, Shape, ShapeDiagnostic, ShapeFragment, TensorShape,
+    diagnostic::{self, Truthy},
 };
 
 struct Transmute;
@@ -54,8 +54,11 @@ where
     T: ShapeFragment + Container,
     U: ShapeFragment + Container,
     (TensorShape<T>, TensorShape<U>): IsCompatible,
-    <(TensorShape<T>, TensorShape<U>) as IsCompatible>::Out:
-        Truthy<Transmute, TensorShape<T>, TensorShape<U>>,
+    <(TensorShape<T>, TensorShape<U>) as IsCompatible>::Out: Truthy<
+            Transmute,
+            <TensorShape<T> as ShapeDiagnostic>::Out,
+            <TensorShape<U> as ShapeDiagnostic>::Out,
+        >,
 {
     type Out = TensorShape<U>;
     crate::private_impl!();
@@ -71,7 +74,7 @@ mod test {
 
     use super::*;
 
-    use crate::{shape, Dyn};
+    use crate::{Dyn, dynamic::Any, shape};
 
     #[allow(unused)]
     #[test]
@@ -93,10 +96,8 @@ mod test {
     #[allow(unused)]
     #[test]
     fn wild() {
-        struct BatchSize;
-        type B = Dyn<BatchSize>;
-        struct SequenceLength;
-        type L = Dyn<SequenceLength>;
+        type B = Dyn<Any>;
+        type L = Dyn<Any>;
         type MyShape = shape![U1, U1, B, U1];
         assert_type_eq!(
             <(shape![U1, U1, U7, U1], MyShape) as IsCompatible>::Out,

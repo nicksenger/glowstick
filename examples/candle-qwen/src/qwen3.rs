@@ -8,14 +8,15 @@ use glowstick::{
     num::{U0, U1, U1024, U12, U128, U16, U2, U2048, U3, U8},
     Shape2, Shape3, Shape4,
 };
+use glowstick_candle::tensor::Tensor;
+use glowstick_candle::{broadcast_add, flatten, matmul, narrow, reshape, transpose};
 use std::sync::Arc;
 
 #[allow(unused)]
 use glowstick::debug_tensor;
 
+use super::Error;
 use crate::shape::*;
-use crate::tensor::Tensor;
-use crate::{flatten, matmul, narrow, reshape, transpose, Error};
 
 #[derive(Debug, Clone, PartialEq, serde::Deserialize)]
 pub struct Config {
@@ -214,20 +215,20 @@ impl Qwen3Attention {
         let v: Tensor<Shape3<U1, L, U1024>> = self.v_proj.forward(x.inner())?.try_into()?;
 
         // 2. Reshape
-        let q = reshape!(&q, Shape4<U1, L, U16, U128>)?;
-        let q = transpose!(&q, U1, U2)?;
-        let k = reshape!(&k, Shape4<U1, L, U8, U128>)?;
-        let k = transpose!(&k, U1, U2)?;
-        let v = reshape!(&v, Shape4<U1, L, U8, U128>)?;
-        let v = transpose!(&v, U1, U2)?;
+        let q = reshape!(&q, [U1, () => L, U16, U128])?;
+        let q = transpose!(&q, U1:U2)?;
+        let k = reshape!(&k, [U1, () => L, U8, U128])?;
+        let k = transpose!(&k, U1:U2)?;
+        let v = reshape!(&v, [U1, () => L, U8, U128])?;
+        let v = transpose!(&v, U1:U2)?;
 
         // 3. Per‑head RMSNorm
-        let q_flat = flatten!(&q, U0, U2)?;
-        let k_flat = flatten!(&k, U0, U2)?;
+        let q_flat = flatten!(&q, [U0, U2])?;
+        let k_flat = flatten!(&k, [U0, U2])?;
         let q_flat: Tensor<Shape2<Bhl, U128>> = self.q_norm.forward(q_flat.inner())?.try_into()?;
         let k_flat: Tensor<Shape2<Bhl, U128>> = self.k_norm.forward(k_flat.inner())?.try_into()?;
-        let q = reshape!(&q_flat, Shape4<U1, U16, L, U128>)?;
-        let k = reshape!(&k_flat, Shape4<U1, U8, L, U128>)?;
+        let q = reshape!(&q_flat, [U1, U16, () => L, U128])?;
+        let k = reshape!(&k_flat, [U1, U8, () => L, U128])?;
 
         // 4. RoPE
         let (q, k) = self.rotary_emb.apply(&q, &k, offset)?;
@@ -243,21 +244,20 @@ impl Qwen3Attention {
 
         // 7. Attention score
         let scale = 1.0 / (self.head_dim as f64).sqrt();
-        let scores = transpose!(&k, U2, U3)?;
-        let scores = matmul!(q, &scores)?;
+        let scores = transpose!(&k, U2:U3)?;
+        let scores = matmul!(&q, scores)?;
         let mut scores = (scores * scale)?;
         if let Some(m) = attn_mask {
-            use crate::tensor::BroadcastAdd;
-            scores = (&scores, m).broadcast_add()?;
+            scores = broadcast_add!(scores, m)?;
         }
         let probs: Tensor<Shape4<U1, U16, L, L>> =
             candle_nn::ops::softmax_last_dim(scores.inner())?.try_into()?;
         let ctx = matmul!(probs, &v)?;
 
         // 8. Output proj
-        let ctx = transpose!(&ctx, U1, U2)?;
-        let ctx = reshape!(&ctx, Shape3<U1, L, U2048>)?;
-        ctx.inner().apply(&self.o_proj)?.try_into()
+        let ctx = transpose!(&ctx, U1:U2)?;
+        let ctx = reshape!(&ctx, [U1, () => L, U2048])?;
+        Ok(ctx.inner().apply(&self.o_proj)?.try_into()?)
     }
 
     pub(crate) fn clear_kv_cache(&mut self) {
@@ -302,7 +302,7 @@ impl DecoderLayer {
         let x = (x + h)?;
         let h2: Tensor<Shape3<U1, L, U1024>> = self.ln2.forward(x.inner())?.try_into()?;
         let h2: Tensor<Shape3<U1, L, U1024>> = h2.inner().apply(&self.mlp)?.try_into()?;
-        &x + h2
+        Ok((&x + h2)?)
     }
 
     fn clear_kv_cache(&mut self) {
@@ -368,9 +368,11 @@ impl Model {
                 })
             })
             .collect();
-        candle::Tensor::from_slice(&mask, (b, 1, tgt, tgt + offset), &self.device)?
-            .to_dtype(self.dtype)?
-            .try_into()
+        Ok(
+            candle::Tensor::from_slice(&mask, (b, 1, tgt, tgt + offset), &self.device)?
+                .to_dtype(self.dtype)?
+                .try_into()?,
+        )
     }
 
     pub fn forward(
@@ -390,7 +392,7 @@ impl Model {
         for layer in &mut self.layers {
             h = layer.forward(&h, causal.as_ref(), offset)?;
         }
-        self.norm.forward(h.inner())?.try_into()
+        Ok(self.norm.forward(h.inner())?.try_into()?)
     }
 }
 
@@ -418,8 +420,8 @@ impl ModelForCausalLM {
     ) -> Result<Tensor<Shape3<U1, U1, U151936>>, Error> {
         let (_, l) = input.dims2()?;
         let t = self.base.forward(input, offset)?;
-        let t = narrow![&t, U1, l - 1, U1]?;
-        t.inner().apply(&self.lm_head)?.try_into()
+        let t = narrow!(&t, U1: [l - 1, U1])?;
+        Ok(t.inner().apply(&self.lm_head)?.try_into()?)
     }
 
     #[allow(unused)]

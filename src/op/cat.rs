@@ -6,11 +6,11 @@ use typosaurus::{
 };
 
 use crate::{
+    Dimensioned, IsFragEqual, Shape, ShapeDiagnostic, ShapeFragment, SkipFragment, TakeFragment,
+    TensorShape,
     cmp::{IsEqual, IsGreater},
     diagnostic::{self, Truthy},
     num::Add,
-    Dimensioned, IsFragEqual, Shape, ShapeDiagnostic, ShapeFragment, SkipFragment, TakeFragment,
-    TensorShape,
 };
 
 struct Cat;
@@ -183,12 +183,12 @@ mod test {
     use typosaurus::{
         assert_type_eq,
         bool::True,
-        num::consts::{U0, U1, U2, U3, U4, U42, U44, U6},
+        num::consts::{U0, U1, U2, U3, U4, U6, U42, U44},
     };
 
     use super::*;
 
-    use crate::{shape, Dyn};
+    use crate::{Dyn, dynamic::Any, shape};
 
     #[allow(unused)]
     #[test]
@@ -214,8 +214,7 @@ mod test {
     #[allow(unused)]
     #[test]
     fn wild() {
-        struct BatchSize;
-        type B = Dyn<BatchSize>;
+        type B = Dyn<Any>;
         type ShapeA = shape![U1, U1, B];
         type ShapeB = shape![U1, U2, B];
 

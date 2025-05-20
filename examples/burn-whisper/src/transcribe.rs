@@ -14,6 +14,7 @@ use glowstick::{
     Shape1, Shape2, Shape3,
     num::{U0, U1, U2, U80},
 };
+use glowstick_burn::{Tensor, log_softmax, reshape, squeeze, unsqueeze};
 use tracing::{debug, trace};
 
 #[allow(unused)]
@@ -27,10 +28,8 @@ use crate::model::*;
 use crate::pcm_decode;
 use crate::pcm_decode::pcm_decode;
 use crate::shape::*;
-use crate::tensor::Tensor;
 use crate::token::*;
 use crate::{HOP_LENGTH, MEL_LEN};
-use crate::{log_softmax, reshape, squeeze, unsqueeze};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -68,7 +67,7 @@ pub enum Error {
     Data(String),
 
     #[error("Tensor error: {0}")]
-    Tensor(#[from] crate::tensor::Error),
+    Tensor(#[from] glowstick_burn::Error),
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -233,7 +232,7 @@ pub async fn waveforms_to_text<
                     mel_data.as_slice(),
                     &device,
                 )?;
-                let mel = reshape!(mel, Shape3<U1, U80, U3000>)?;
+                let mel = reshape!(mel, [U1, U80, U3000])?;
 
                 Ok::<_, Error>((mel, mel_len))
             })?;

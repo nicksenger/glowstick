@@ -1,6 +1,26 @@
 [package]
 name = "glowstick"
-description = "Type-level tensor shapes"
+description = "Gradual typing for tensor shapes"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+categories.workspace = true
+keywords.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+typosaurus = { git = "https://github.com/nicksenger/typosaurus.git", branch = "feat/value-list" }
+
+[workspace]
+members = [
+  "glowstick-burn",
+  "glowstick-candle",
+  "examples/*",
+]
+
+[workspace.package]
 version = "0.1.0"
 authors = ["Nick Senger <dev@nsenger.com>"]
 edition = "2024"
@@ -10,6 +30,13 @@ categories = ["science"]
 keywords = ["science", "math", "machine-learning", "metaprogramming", "types"]
 rust-version = "1.85"
 
-[dependencies]
-typosaurus = "0.1"
+[workspace.dependencies]
+burn = { git = "https://github.com/tracel-ai/burn.git", rev = "60158231a1d9a8a257c207d79e2d8992cd869d2a" }
+candle = { git = "https://github.com/huggingface/candle.git", rev = "637473cb5ee5eb2c354b8359c55d62a76d184c17", package = "candle-core" }
+glowstick = { path = "." }
+glowstick-burn = { path = "./glowstick-burn" }
+glowstick-candle = { path = "./glowstick-candle" }
+thiserror = "2"
+
+[dev-dependencies]
 

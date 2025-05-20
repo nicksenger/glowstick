@@ -1,8 +1,13 @@
 pub mod broadcast;
 pub mod cat;
+pub mod convolution;
 pub mod flatten;
+pub mod gather;
 pub mod matmul;
 pub mod narrow;
+pub mod narrow_dyn;
+pub mod narrow_dyn_start;
+pub mod pad;
 pub mod permute;
 pub mod reshape;
 pub mod squeeze;

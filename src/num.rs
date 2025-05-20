@@ -1,8 +1,12 @@
 use crate::Dyn;
-use typosaurus::num::{UInt, UTerm};
+use crate::dynamic::DynAdd;
+use crate::dynamic::DynMul;
+use typosaurus::collections::list::{Empty, List};
+use typosaurus::num::UTerm;
 
-pub use typosaurus::num::Unsigned;
 pub use typosaurus::num::consts::*;
+pub use typosaurus::num::{UInt, Unsigned};
+use typosaurus::traits::functor::Mapper;
 
 pub trait Div {
     type Out;
@@ -45,11 +49,23 @@ impl<L> Add for (UTerm, Dyn<L>) {
 impl<L> Add for (Dyn<L>, UTerm) {
     type Out = Dyn<L>;
 }
-impl<U, B, L> Add for (UInt<U, B>, Dyn<L>) {
-    type Out = Dyn<L>;
+impl<U, B, L> Add for (UInt<U, B>, Dyn<L>)
+where
+    L: DynAdd<UInt<U, B>>,
+{
+    type Out = Dyn<<L as DynAdd<UInt<U, B>>>::Out>;
 }
-impl<U, B, L> Add for (Dyn<L>, UInt<U, B>) {
-    type Out = Dyn<L>;
+impl<U, B, L> Add for (Dyn<L>, UInt<U, B>)
+where
+    L: DynAdd<UInt<U, B>>,
+{
+    type Out = Dyn<<L as DynAdd<UInt<U, B>>>::Out>;
+}
+impl<T, U> Add for (Dyn<T>, Dyn<U>)
+where
+    T: DynAdd<U>,
+{
+    type Out = Dyn<<T as DynAdd<U>>::Out>;
 }
 impl<T, U> Add for (T, U)
 where
@@ -89,17 +105,77 @@ impl<L> Mul for (UTerm, Dyn<L>) {
 impl<L> Mul for (Dyn<L>, UTerm) {
     type Out = UTerm;
 }
-impl<U, B, L> Mul for (UInt<U, B>, Dyn<L>) {
-    type Out = Dyn<L>;
+impl<U, B, L> Mul for (UInt<U, B>, Dyn<L>)
+where
+    L: DynMul<UInt<U, B>>,
+{
+    type Out = Dyn<<L as DynMul<UInt<U, B>>>::Out>;
 }
-impl<U, B, L> Mul for (Dyn<L>, UInt<U, B>) {
-    type Out = Dyn<L>;
+impl<U, B, L> Mul for (Dyn<L>, UInt<U, B>)
+where
+    L: DynMul<UInt<U, B>>,
+{
+    type Out = Dyn<<L as DynMul<UInt<U, B>>>::Out>;
+}
+impl<T, U> Mul for (Dyn<T>, Dyn<U>)
+where
+    T: DynMul<U>,
+{
+    type Out = Dyn<<T as DynMul<U>>::Out>;
 }
 impl<T, U> Mul for (T, U)
 where
     T: core::ops::Mul<U>,
 {
     type Out = <T as core::ops::Mul<U>>::Output;
+}
+
+pub struct ZipSub;
+impl<T, U> Mapper<List<(T, List<(U, Empty)>)>> for ZipSub
+where
+    (T, U): Sub,
+{
+    type Out = <(T, U) as Sub>::Out;
+}
+pub struct ZipAdd;
+impl<T, U> Mapper<List<(T, List<(U, Empty)>)>> for ZipAdd
+where
+    (T, U): Add,
+{
+    type Out = <(T, U) as Add>::Out;
+}
+pub struct ZipDiv;
+impl<T, U> Mapper<List<(T, List<(U, Empty)>)>> for ZipDiv
+where
+    (T, U): Div,
+{
+    type Out = <(T, U) as Div>::Out;
+}
+pub struct ZipDivAddOne;
+impl<T, U> Mapper<List<(T, List<(U, Empty)>)>> for ZipDivAddOne
+where
+    (T, U): Div,
+    (<(T, U) as Div>::Out, U1): Add,
+{
+    type Out = <(<(T, U) as Div>::Out, U1) as Add>::Out;
+}
+
+// This is tailored to keff calc
+pub struct ZipSubOneMul;
+impl<T, U> Mapper<List<(T, List<(U, Empty)>)>> for ZipSubOneMul
+where
+    (T, U1): Sub,
+    (U, U1): Sub,
+    (<(T, U1) as Sub>::Out, <(U, U1) as Sub>::Out): Mul,
+    (
+        <(<(T, U1) as Sub>::Out, <(U, U1) as Sub>::Out) as Mul>::Out,
+        U,
+    ): Add,
+{
+    type Out = <(
+        <(<(T, U1) as Sub>::Out, <(U, U1) as Sub>::Out) as Mul>::Out,
+        U,
+    ) as Add>::Out;
 }
 
 pub mod monoid {

@@ -1,37 +1,39 @@
 use core::marker::PhantomData;
 
+use dynamic::Dynamic;
+use typosaurus::collections::list::{All, Skippable, Takeable};
 use typosaurus::num::{
-    consts::{U0, U1, U10, U2, U3, U4, U5, U6, U7, U8, U9},
     Bit, NonZero, UInt, Unsigned,
+    consts::{U0, U1, U2, U3, U4, U5, U6, U7, U8, U9, U10},
 };
 use typosaurus::{
     bool::{And, Or},
-    collections::{
-        list::{Rev, Reversible},
-        Container,
-    },
+    collections::list::{Rev, Reversible},
     traits::{fold::Foldable, functor::Mapper},
 };
-use typosaurus::{
-    collections::list::{All, Indexed, Skippable, Takeable},
-    traits::functor::Map,
-};
+
+pub use typosaurus::collections::Container;
+pub use typosaurus::collections::list::{Indexed, List, Zippable};
+pub use typosaurus::traits::functor::Map;
 
 pub mod cmp;
 pub mod diagnostic;
+pub mod dynamic;
 pub mod num;
 pub mod op;
-use cmp::{IsEqual, IsLess, Max};
-use num::{monoid::Multiplication, Add, Div, Rem, Sub};
+use cmp::{IsEqual, IsGreater, IsLess, Max};
+use num::{Add, Div, Rem, Sub, monoid::Multiplication};
 pub use typosaurus::assert_type_eq;
 pub use typosaurus::bool::{False, True};
 pub use typosaurus::collections::tuple;
+pub use typosaurus::collections::value_list::List as ValueList;
 pub use typosaurus::collections::{
     array::Arrayify,
     list::{Empty, List as Shp},
     tuple::Tuplify,
 };
-use typosaurus::traits::semigroup::Mappend;
+pub use typosaurus::list;
+pub use typosaurus::traits::semigroup::Mappend;
 
 #[macro_export]
 macro_rules! shape {
@@ -99,8 +101,18 @@ where
 {
     type Out = <(N, M) as IsLess>::Out;
 }
+pub struct IsGreaterThan<M>(PhantomData<M>);
+impl<N, M> Mapper<N> for IsGreaterThan<M>
+where
+    (N, M): IsGreater,
+{
+    type Out = <(N, M) as IsGreater>::Out;
+}
 type LessThan<T, N> = <(T, IsLessThan<N>) as Map<<T as Container>::Content, IsLessThan<N>>>::Out;
 type AllLessThan<T, N> = All<LessThan<T, N>>;
+type GreaterThan<T, N> =
+    <(T, IsGreaterThan<N>) as Map<<T as Container>::Content, IsGreaterThan<N>>>::Out;
+pub type AllGreaterThan<T, N> = All<GreaterThan<T, N>>;
 
 pub struct PermutationOf<T>(PhantomData<T>);
 impl<T, N> Mapper<N> for PermutationOf<T>
@@ -115,6 +127,7 @@ pub trait Tensor {
 }
 
 pub trait Shape {
+    type Fragment: ShapeFragment;
     type Dim<N>: Dimension
     where
         (Self, N): Dimensioned;
@@ -148,6 +161,7 @@ impl<T> Shape for TensorShape<T>
 where
     T: ShapeFragment,
 {
+    type Fragment = T;
     type Dim<N>
         = <(Self, N) as Dimensioned>::Out
     where
@@ -219,6 +233,20 @@ where
     private_impl!();
 }
 
+pub trait ZipFragment {
+    type Out;
+    private!();
+}
+impl<T, U> ZipFragment for (TensorShape<T>, TensorShape<U>)
+where
+    T: ShapeFragment,
+    U: ShapeFragment,
+    (T, U): Zippable,
+{
+    type Out = <(T, U) as Zippable>::Out;
+    private_impl!();
+}
+
 pub trait TakeFragment {
     type Out: ShapeFragment;
     private!();
@@ -258,6 +286,31 @@ where
         <(T1, T2) as IsDimEqual>::Out,
         <(U1, U2) as IsFragEqual>::Out,
     ) as And>::Out;
+}
+
+pub trait MaxDim {
+    type Out: Dimension;
+    private!();
+}
+impl<T> MaxDim for TensorShape<T>
+where
+    T: ShapeFragment + MaxDim,
+{
+    type Out = <T as MaxDim>::Out;
+    private_impl!();
+}
+impl MaxDim for Empty {
+    type Out = U0;
+    private_impl!();
+}
+impl<T, U> MaxDim for Shp<(T, U)>
+where
+    U: MaxDim,
+    (T, <U as MaxDim>::Out): Max,
+    <(T, <U as MaxDim>::Out) as Max>::Out: Dimension,
+{
+    type Out = <(T, <U as MaxDim>::Out) as Max>::Out;
+    private_impl!();
 }
 
 pub trait MaxDims {
@@ -601,8 +654,11 @@ decimpl![
     (U9, _9)
 ];
 pub struct Dec<T>(PhantomData<T>);
-impl<L> DecimalDiagnostic for Dyn<L> {
-    type Out = Dyn<L>;
+impl<L> DecimalDiagnostic for Dyn<L>
+where
+    L: Dynamic,
+{
+    type Out = Dyn<<L as Dynamic>::Label>;
     private_impl!();
 }
 impl<T> DecimalDiagnostic for (Dec<T>, True)
@@ -686,13 +742,12 @@ mod test {
     #[test]
     fn dyn_diag() {
         struct BatchSize;
+        impl Dynamic for BatchSize {
+            type Label = Self;
+        }
         type B = Dyn<BatchSize>;
         type DynShape = shape![U1, U1, B];
         type Diag = <DynShape as ShapeDiagnostic>::Out;
         assert_type_eq!(Diag, (RANK<_3>, (DIM<_1>, DIM<_1>, DIM<Dyn<BatchSize>>)));
     }
 }
-
-#[doc = include_str!("../README.md")]
-#[cfg(doctest)]
-pub struct ReadmeDoctests;

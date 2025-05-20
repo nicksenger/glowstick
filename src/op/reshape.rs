@@ -1,10 +1,10 @@
 use typosaurus::{collections::Container, traits::fold::Foldable};
 
 use crate::{
+    Product, Shape, ShapeDiagnostic, ShapeFragment, TensorShape,
     cmp::IsEqual,
     diagnostic::{self, Truthy},
     num::monoid::Multiplication,
-    Product, Shape, ShapeDiagnostic, ShapeFragment, TensorShape,
 };
 
 struct Reshape;
@@ -69,7 +69,7 @@ mod test {
 
     use super::*;
 
-    use crate::{shape, Dyn};
+    use crate::{Dyn, dynamic::Any, shape};
 
     #[allow(unused)]
     #[test]
@@ -106,8 +106,7 @@ mod test {
     #[allow(unused)]
     #[test]
     fn wild() {
-        struct BatchSize;
-        type B = Dyn<BatchSize>;
+        type B = Dyn<Any>;
         type MyShape = shape![U1, U1, B, U1];
         assert_type_eq!(<(MyShape, shape![U1, U7]) as IsCompatible>::Out, True);
         assert_type_eq!(

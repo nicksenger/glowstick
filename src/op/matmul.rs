@@ -7,9 +7,9 @@ use typosaurus::traits::semigroup::Mappend;
 
 use crate::ShapeDiagnostic;
 use crate::{
-    diagnostic::{self, Truthy},
     Dimension, Dimensioned, IsDimEqual, IsFragEqual, IsRankEqual, Shape, ShapeFragment,
     TakeFragment,
+    diagnostic::{self, Truthy},
 };
 
 pub trait Operand: Sized + Shape {
@@ -87,10 +87,10 @@ where
     U: Operand + ShapeDiagnostic,
     (T, U): IsCompatible,
     <(T, U) as IsCompatible>::Out: Truthy<
-        MatrixMultiplication,
-        <T as crate::ShapeDiagnostic>::Out,
-        <U as crate::ShapeDiagnostic>::Out,
-    >,
+            MatrixMultiplication,
+            <T as crate::ShapeDiagnostic>::Out,
+            <U as crate::ShapeDiagnostic>::Out,
+        >,
     (
         D<(<T as Operand>::NextDim, Empty)>,
         D<(<U as Operand>::LastDim, Empty)>,
@@ -124,11 +124,11 @@ where
 mod test {
     use typosaurus::{
         assert_type_eq,
-        num::consts::{U0, U1, U100, U1024, U120, U2, U200, U2048, U240, U3, U360, U3600},
+        num::consts::{U0, U1, U2, U3, U100, U120, U200, U240, U360, U1024, U2048, U3600},
     };
 
     use super::*;
-    use crate::{fragment, shape, Dyn};
+    use crate::{Dyn, dynamic::Any, fragment, shape};
     use typosaurus::bool::{False, True};
     use typosaurus::collections::list::Idx;
 
@@ -163,17 +163,21 @@ mod test {
     #[allow(unused)]
     #[test]
     fn compat3() {
-        type ShapeA =
-            shape![U100, U200, U100, U200, U100, U200, U100, U200, U100, U200, U2048, U3600];
-        type ShapeB =
-            shape![U100, U200, U100, U200, U100, U200, U100, U200, U100, U200, U3600, U1024];
+        type ShapeA = shape![
+            U100, U200, U100, U200, U100, U200, U100, U200, U100, U200, U2048, U3600
+        ];
+        type ShapeB = shape![
+            U100, U200, U100, U200, U100, U200, U100, U200, U100, U200, U3600, U1024
+        ];
         type PreA = <ShapeA as Operand>::Pre;
         type PreB = <ShapeB as Operand>::Pre;
         assert_type_eq!(PreA, PreB);
         assert_type_eq!(<(PreA, PreB) as IsFragEqual>::Out, True);
         assert_type_eq!(
             <(ShapeA, ShapeB) as Compatible>::Out,
-            fragment![U100, U200, U100, U200, U100, U200, U100, U200, U100, U200, U2048, U1024]
+            fragment![
+                U100, U200, U100, U200, U100, U200, U100, U200, U100, U200, U2048, U1024
+            ]
         );
     }
 
@@ -231,8 +235,7 @@ mod test {
     #[allow(unused)]
     #[test]
     fn wild() {
-        struct BatchSize;
-        type B = Dyn<BatchSize>;
+        type B = Dyn<Any>;
         type ShapeA = shape![U1, B, U3];
         type ShapeB = shape![U1, U3, B];
 
@@ -243,8 +246,7 @@ mod test {
     #[allow(unused)]
     #[test]
     fn wild2() {
-        struct BatchSize;
-        type B = Dyn<BatchSize>;
+        type B = Dyn<Any>;
         type ShapeA = shape![U1, U2, B];
         type ShapeB = shape![U1, U3, U2];
 

@@ -1,17 +1,17 @@
 use typosaurus::{
-    bool::{monoid::Both, And},
+    bool::{And, monoid::Both},
     collections::{
-        list::{IsUnique, Len, Ones},
         Container,
+        list::{IsUnique, Len, Ones},
     },
     num::Addition,
     traits::{fold::Foldable, functor::Map},
 };
 
 use crate::{
+    AllLessThan, IsLessThan, PermutationOf, Shape, ShapeDiagnostic, ShapeFragment,
     cmp::IsEqual,
     diagnostic::{self, Truthy},
-    AllLessThan, IsLessThan, PermutationOf, Shape, ShapeDiagnostic, ShapeFragment,
 };
 
 /// Boolean type operator for `Permute` compatibility.
@@ -102,12 +102,12 @@ mod test {
         assert_type_eq,
         bool::{False, True},
         list,
-        num::consts::{U0, U1, U2, U3, U4, U42, U5},
+        num::consts::{U0, U1, U2, U3, U4, U5, U42},
     };
 
     use super::*;
 
-    use crate::{fragment, shape, Dyn};
+    use crate::{Dyn, dynamic::Any, fragment, shape};
 
     #[allow(unused)]
     #[test]
@@ -151,8 +151,7 @@ mod test {
     #[allow(unused)]
     #[test]
     fn wild() {
-        struct BatchSize;
-        type B = Dyn<BatchSize>;
+        type B = Dyn<Any>;
         type MyShape = shape![U1, U1, B, U1];
         type Indices = list![U2, U3, U1, U0];
         assert_type_eq!(<(MyShape, Indices) as IsCompatible>::Out, True);

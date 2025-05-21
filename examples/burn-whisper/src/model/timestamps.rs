@@ -1,7 +1,7 @@
 use std::num::NonZeroUsize;
 
 use burn::{
-    prelude::Backend,
+    prelude::{Backend, s},
     tensor::{DataError, Tensor as BTensor},
 };
 use glowstick::num::{U1, U2, U3, U6, U32};
@@ -192,13 +192,12 @@ impl AlignmentHeads {
                     .iter()
                     .copied()
                     .filter_map(|AlignmentHead { layer, head }| {
-                        let (_l, h) = (layer as i64, head as i64);
                         let layer = cross_attentions.get(layer)?;
                         Some(
                             layer
                                 .clone()
                                 .into_inner()
-                                .slice([None, Some((h, h + 1)), None, None]),
+                                .slice(s![.., head..(head + 1), .., ..]),
                         )
                     })
                     .collect::<Vec<_>>(),
@@ -240,7 +239,7 @@ impl AlignmentHeads {
                     let (text_indices, time_indices) = dynamic_time_warp(to_vec_2(
                         cost.clone()
                             .neg()
-                            .slice(batch_idx..batch_idx + 1)
+                            .slice(s![batch_idx..(batch_idx + 1), ..])
                             .squeeze(0),
                     )?);
 
@@ -344,17 +343,17 @@ fn median_filter<B: Backend>(
     let weights = weights.into_inner().pad((pad_width, pad_width, 0, 0), 0);
     let mut medians: Vec<BTensor<B, 4>> = vec![];
     for i in 0..w {
-        let weights = weights.clone().slice([
-            None,
-            None,
-            None,
-            Some((i as i64, i as i64 + filter_width as i64)),
+        let weights = weights.clone().slice(s![
+            ..,
+            ..,
+            ..,
+            i..(i + filter_width)
         ]);
-        medians.push(weights.sort(3).slice([
-            None,
-            None,
-            None,
-            Some((pad_width as i64, pad_width as i64 + 1)),
+        medians.push(weights.sort(3).slice(s![
+            ..,
+            ..,
+            ..,
+            pad_width..(pad_width + 1)
         ]));
     }
     let medians = BTensor::cat(medians, 3);

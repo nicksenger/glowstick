@@ -11,8 +11,7 @@ ndarray = ["burn/ndarray"]
 wgpu = ["burn/wgpu"]
 
 [dependencies]
-bincode = "=2.0.0-rc.3"
-burn = { git = "https://github.com/tracel-ai/burn.git", rev = "60158231a1d9a8a257c207d79e2d8992cd869d2a" }
+burn = "0.17"
 byteorder = "1.5"
 cfg-if = "0.1"
 clap = { version = "4.5", features = ["derive"] }

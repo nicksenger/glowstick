@@ -3,9 +3,9 @@ name = "candle-qwen"
 edition = "2021"
 
 [dependencies]
-candle = { git = "https://github.com/huggingface/candle.git", rev = "637473cb5ee5eb2c354b8359c55d62a76d184c17", package = "candle-core" }
-candle-nn = { git = "https://github.com/huggingface/candle.git", rev = "637473cb5ee5eb2c354b8359c55d62a76d184c17" }
-candle-transformers = { git = "https://github.com/huggingface/candle.git", rev = "637473cb5ee5eb2c354b8359c55d62a76d184c17" }
+candle = { version = "0.9", package = "candle-core" }
+candle-nn = "0.9"
+candle-transformers = "0.9"
 glowstick.workspace = true
 glowstick-candle.workspace = true
 

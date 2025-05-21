@@ -10,7 +10,7 @@ categories.workspace = true
 keywords.workspace = true
 
 [dependencies]
-candle.workspace = true
+candle = { version = "0.9", package = "candle-core" }
 glowstick.workspace = true
 thiserror.workspace = true
 

@@ -31,8 +31,6 @@ keywords = ["science", "math", "machine-learning", "metaprogramming", "types"]
 rust-version = "1.85"
 
 [workspace.dependencies]
-burn = { git = "https://github.com/tracel-ai/burn.git", rev = "60158231a1d9a8a257c207d79e2d8992cd869d2a" }
-candle = { git = "https://github.com/huggingface/candle.git", rev = "637473cb5ee5eb2c354b8359c55d62a76d184c17", package = "candle-core" }
 glowstick = { path = "." }
 glowstick-burn = { path = "./glowstick-burn" }
 glowstick-candle = { path = "./glowstick-candle" }

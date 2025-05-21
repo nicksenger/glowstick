@@ -10,7 +10,7 @@ categories.workspace = true
 keywords.workspace = true
 
 [dependencies]
-burn.workspace = true
+burn = "0.17"
 glowstick.workspace = true
 thiserror.workspace = true
 

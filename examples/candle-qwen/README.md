@@ -1,11 +1,11 @@
-## burn-whisper
+## candle-qwen
 
-This example implements Alibaba's Qwen3 0.6B using the [candle](https://github.com/huggingface/candle) framework, leveraging glowstick where possible for compile-time tensor shapes. It was largely copied from the corresponding [candle qwen example](https://github.com/huggingface/candle/tree/main/candle-examples/examples/qwen).
+This example implements Alibaba Cloud's Qwen 2 and 3 using the [candle](https://github.com/huggingface/candle) framework, leveraging glowstick where possible for compile-time tensor shapes. It was largely copied from the corresponding [candle qwen example](https://github.com/huggingface/candle/tree/main/candle-examples/examples/qwen).
 
-Use the following command to transcribe the included WAV file:
+Use the following command to generate some code:
 
-`cargo run --release --features=metal -- --model 3-0.6b --prompt 'fn print_prime(n: u32) -> bool {'`
+`cargo run --release -- --model 2.5-0.5b --prompt 'fn print_prime(n: u32) -> bool {'`
 
-Note that most of the typed shape usage can be found in the model implementation (`src/qwen3.rs`), while `src/tensor.rs` provides a minimal integration of glowstick and candle.
+Note that most of the typed shape usage can be found in the model implementations (`src/qwen3.rs` & `src/qwen2.rs`).
 
 If you're looking for additional depth, the burn-whisper example is a bit more complex.

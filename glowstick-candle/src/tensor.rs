@@ -6,8 +6,8 @@ use glowstick::{
     Shape, TensorShape,
     num::Unsigned,
     op::{
-        broadcast, flatten, matmul, narrow, narrow_dyn, narrow_dyn_start, reshape, squeeze,
-        transpose, unsqueeze,
+        broadcast, cat_dyn, flatten, matmul, narrow, narrow_dyn, narrow_dyn_start, reshape,
+        squeeze, transpose, unsqueeze,
     },
 };
 
@@ -29,6 +29,11 @@ pub enum Error {
 
 #[allow(unused)]
 pub struct Tensor<S: Shape>(candle::Tensor, PhantomData<S>);
+impl<S: Shape> AsRef<candle::Tensor> for Tensor<S> {
+    fn as_ref(&self) -> &candle::Tensor {
+        self.inner()
+    }
+}
 
 impl<S> glowstick::Tensor for Tensor<S>
 where
@@ -275,6 +280,7 @@ pub trait Reshape {
     type Out;
     fn reshape<Args: ShapeWithOneHole>(&self, args: Args) -> Self::Out;
 }
+
 impl<T, S1, S2> Reshape for (T, PhantomData<S1>, PhantomData<S2>)
 where
     T: Borrow<Tensor<S1>>,
@@ -441,6 +447,22 @@ where
     }
 }
 
+pub trait Cat {
+    type Out;
+    fn cat(self) -> Self::Out;
+}
+impl<S, I, D> Cat for (&[Tensor<S>], PhantomData<I>, PhantomData<glowstick::Dyn<D>>)
+where
+    S: Shape,
+    (S, I, glowstick::Dyn<D>): cat_dyn::Compatible,
+    I: Unsigned,
+{
+    type Out = Result<Tensor<<(S, I, glowstick::Dyn<D>) as cat_dyn::Compatible>::Out>, Error>;
+    fn cat(self) -> Self::Out {
+        candle::Tensor::cat(self.0, <I as Unsigned>::USIZE)?.try_into()
+    }
+}
+
 #[macro_export]
 macro_rules! squeeze {
     [$t:expr,$i:ty] => {{
@@ -536,14 +558,6 @@ macro_rules! narrow {
 
 #[macro_export]
 macro_rules! reshape {
-    ($t:expr,[$e:expr => $d:ty,$($ds:tt)*]) => {{
-        use $crate::tensor::Reshape;
-        (
-            $t,
-            std::marker::PhantomData::<glowstick::TensorShape<$crate::reshape_tys!($e => $d,$($ds)+)>>,
-        )
-            .reshape($crate::reshape_val!($d => $e,$($ds)+).tuplify())
-    }};
     ($t:expr,[$($ds:tt)+]) => {{
         use $crate::tensor::Reshape;
         (
@@ -656,5 +670,18 @@ macro_rules! matmul {
         ($t1, $t2, std::marker::PhantomData)
             .matmul()
             .and_then(|t| $crate::matmul!(&t, $t2s))
+    }};
+}
+
+#[macro_export]
+macro_rules! cat {
+    ($ts:expr,$i:ty => $d:ty) => {{
+        use $crate::tensor::Cat;
+        (
+            $ts,
+            std::marker::PhantomData::<$i>,
+            std::marker::PhantomData::<$d>,
+        )
+            .cat()
     }};
 }

@@ -1,5 +1,6 @@
 pub mod broadcast;
 pub mod cat;
+pub mod cat_dyn;
 pub mod convolution;
 pub mod flatten;
 pub mod gather;

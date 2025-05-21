@@ -143,7 +143,7 @@ macro_rules! dyndim {
             type Out = $crate::True;
         }
         impl $crate::dynamic::DynMax<$label> for $label {
-            type Out = SequenceLength;
+            type Out = $label;
         }
     };
 }

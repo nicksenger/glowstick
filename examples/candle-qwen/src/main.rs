@@ -3,19 +3,21 @@ use clap::Parser;
 
 use candle::{DType, Device};
 use candle_nn::VarBuilder;
-use candle_transformers::generation::LogitsProcessor;
+use candle_transformers::generation::{LogitsProcessor, Sampling};
 use glowstick::{
     num::{U0, U1},
-    Shape3,
+    Shape2, Shape3,
 };
-use glowstick_candle::squeeze;
 use glowstick_candle::tensor::Tensor;
+use glowstick_candle::{cat, narrow, squeeze};
 use hf_hub::{api::sync::Api, Repo, RepoType};
 use tokenizers::Tokenizer;
 
+mod qwen2;
 mod qwen3;
 mod shape;
 
+use qwen2::{Config as Config2, ModelForCausalLM as Model2};
 use qwen3::{Config as Config3, ModelForCausalLM as Model3};
 use shape::*;
 
@@ -31,6 +33,18 @@ pub enum Error {
         type_level: usize,
     },
 
+    #[error("Couldn't find the EOS token.")]
+    MissingEosToken,
+
+    #[error("No token streams!")]
+    NoTokenStreams,
+
+    #[error("I/O: {0}")]
+    Io(#[from] std::io::Error),
+
+    #[error("Encode error: {0}")]
+    Encode(String),
+
     #[error("{0}")]
     Candle(#[from] candle::Error),
 
@@ -39,46 +53,62 @@ pub enum Error {
 }
 
 enum Model {
+    Instruct2(Model2),
     Base3(Model3),
 }
 
 impl Model {
     fn forward(
         &mut self,
-        xs: &candle::Tensor,
+        xs: &Tensor<Shape2<N, L>>,
         s: usize,
-    ) -> Result<Tensor<Shape3<U1, U1, U151936>>, Error> {
+    ) -> Result<Tensor<Shape3<N, U1, U151936>>, Error> {
         match self {
             Self::Base3(ref mut m) => m.forward(xs, s),
+            Self::Instruct2(ref mut m) => Ok(m.forward(xs.inner(), s)?.try_into()?),
         }
     }
 }
 
-struct TextGeneration {
+struct TextGeneration<'a> {
     model: Model,
     device: Device,
-    tokenizer: TokenOutputStream,
+    token_streams: Vec<TokenOutputStream<'a>>,
     logits_processor: LogitsProcessor,
     repeat_penalty: f32,
     repeat_last_n: usize,
 }
 
-impl TextGeneration {
+impl<'a> TextGeneration<'a> {
     #[allow(clippy::too_many_arguments)]
     fn new(
         model: Model,
-        tokenizer: Tokenizer,
+        tokenizer: &'a Tokenizer,
         seed: u64,
         temp: Option<f64>,
+        top_k: Option<usize>,
         top_p: Option<f64>,
         repeat_penalty: f32,
         repeat_last_n: usize,
+        num_return_sequences: usize,
         device: &Device,
     ) -> Self {
-        let logits_processor = LogitsProcessor::new(seed, temp, top_p);
+        let temperature = temp.and_then(|v| if v < 1e-7 { None } else { Some(v) });
+        let sampling = match temperature {
+            None => Sampling::ArgMax,
+            Some(temperature) => match (top_k, top_p) {
+                (None, None) => Sampling::All { temperature },
+                (Some(k), None) => Sampling::TopK { k, temperature },
+                (None, Some(p)) => Sampling::TopP { p, temperature },
+                (Some(k), Some(p)) => Sampling::TopKThenTopP { k, p, temperature },
+            },
+        };
+        let logits_processor = LogitsProcessor::from_sampling(seed, sampling);
         Self {
             model,
-            tokenizer: TokenOutputStream::new(tokenizer),
+            token_streams: (0..num_return_sequences)
+                .map(|_| TokenOutputStream::new(tokenizer))
+                .collect::<Vec<_>>(),
             logits_processor,
             repeat_penalty,
             repeat_last_n,
@@ -86,66 +116,166 @@ impl TextGeneration {
         }
     }
 
-    fn run(&mut self, prompt: &str, sample_len: usize) -> Result<()> {
+    fn run(&mut self, prompt: &str, sample_len: usize) -> Result<(), Error> {
         use std::io::Write;
-        self.tokenizer.clear();
-        let mut tokens = self
-            .tokenizer
-            .tokenizer()
-            .encode(prompt, true)
-            .map_err(E::msg)?
-            .get_ids()
-            .to_vec();
-        for &t in tokens.iter() {
-            if let Some(t) = self.tokenizer.next_token(t)? {
-                print!("{t}")
+
+        let n_outputs = self.token_streams.len();
+        let (eos_token, eos_token2) = self
+            .token_streams
+            .first()
+            .map(|t| {
+                let eos_token = t.get_token("<|endoftext|>").ok_or(Error::MissingEosToken)?;
+                let eos_token2 = t.get_token("<|im_end|>").ok_or(Error::MissingEosToken)?;
+                Ok::<_, Error>((eos_token, eos_token2))
+            })
+            .ok_or(Error::NoTokenStreams)??;
+        self.token_streams.iter_mut().for_each(|tokenizer| {
+            tokenizer.clear();
+        });
+
+        enum TokenList {
+            Generating(Vec<u32>),
+            Terminated(Vec<u32>),
+        }
+        impl TokenList {
+            fn len(&self) -> usize {
+                match self {
+                    Self::Generating(v) => v.len(),
+                    Self::Terminated(v) => v.len(),
+                }
+            }
+
+            fn iter(&self) -> impl Iterator<Item = &u32> {
+                match self {
+                    Self::Generating(v) => v.iter(),
+                    Self::Terminated(v) => v.iter(),
+                }
+            }
+
+            fn ctxt(&self, start_pos: usize) -> &[u32] {
+                match self {
+                    Self::Generating(v) => &v[start_pos..],
+                    Self::Terminated(v) => &v[start_pos..],
+                }
+            }
+
+            fn push(&mut self, t: u32) {
+                match self {
+                    Self::Generating(v) => {
+                        v.push(t);
+                    }
+                    Self::Terminated(v) => {
+                        v.push(t);
+                    }
+                }
+            }
+
+            fn terminate(&mut self) {
+                let v = match self {
+                    Self::Generating(v) | Self::Terminated(v) => std::mem::take(v),
+                };
+                *self = Self::Terminated(v);
+            }
+        }
+
+        let mut token_lists = self
+            .token_streams
+            .iter()
+            .map(|t| {
+                Ok::<_, Error>(TokenList::Generating(
+                    t.tokenizer()
+                        .encode(prompt, true)
+                        .map_err(|e| Error::Encode(e.to_string()))?
+                        .get_ids()
+                        .to_vec(),
+                ))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let mut seq_len = 0;
+        let mut finished_sequences = vec![vec![]; token_lists.len()];
+        for (i, (v, st)) in token_lists.iter().zip(&mut self.token_streams).enumerate() {
+            seq_len = v.len();
+            for &t in v.iter() {
+                if let Some(t) = st.next_token(t)? {
+                    if n_outputs == 1 {
+                        print!("{t}")
+                    }
+                    finished_sequences[i].push(t);
+                }
             }
         }
         std::io::stdout().flush()?;
 
         let mut generated_tokens = 0usize;
-        let eos_token = match self.tokenizer.get_token("<|endoftext|>") {
-            Some(token) => token,
-            None => anyhow::bail!("cannot find the <|endoftext|> token"),
-        };
-        let eos_token2 = match self.tokenizer.get_token("<|im_end|>") {
-            Some(token) => token,
-            None => anyhow::bail!("cannot find the <|im_end|> token"),
-        };
         let start_gen = std::time::Instant::now();
         for index in 0..sample_len {
-            let context_size = if index > 0 { 1 } else { tokens.len() };
-            let start_pos = tokens.len().saturating_sub(context_size);
-            let ctxt = &tokens[start_pos..];
-            let input = candle::Tensor::new(ctxt, &self.device)?.unsqueeze(0)?;
-            let logits = self.model.forward(&input, start_pos)?;
-            let logits = squeeze![&logits, U1, U0]?.to_dtype(DType::F32)?;
-            let logits = if self.repeat_penalty == 1. {
-                logits
-            } else {
-                let start_at = tokens.len().saturating_sub(self.repeat_last_n);
-                candle_transformers::utils::apply_repeat_penalty(
-                    logits.inner(),
-                    self.repeat_penalty,
-                    &tokens[start_at..],
-                )?
-                .try_into()?
-            };
-
-            let next_token = self.logits_processor.sample(logits.inner())?;
-            tokens.push(next_token);
-            generated_tokens += 1;
-            if next_token == eos_token || next_token == eos_token2 {
+            let context_size = if index > 0 { 1 } else { seq_len };
+            let Some(generating) = token_lists
+                .iter()
+                .find(|v| matches!(v, TokenList::Generating(_)))
+            else {
                 break;
-            }
-            if let Some(t) = self.tokenizer.next_token(next_token)? {
-                print!("{t}");
-                std::io::stdout().flush()?;
+            };
+            let start_pos = generating.len().saturating_sub(context_size);
+            let inputs = cat!(token_lists.iter().map(|v| {
+                let start_pos = v.len().saturating_sub(context_size);
+                let ctxt = v.ctxt(start_pos);
+                let input: Tensor<Shape2<U1, L>> = candle::Tensor::new(ctxt, &self.device)?.unsqueeze(0)?.try_into()?;
+
+                Ok::<_, Error>(input)
+            }).collect::<Result<Vec<Tensor<_>>, _>>()?.as_slice(), U0 => N)?;
+
+            let logits = self.model.forward(&inputs, start_pos)?;
+            for (i, (v, st)) in token_lists
+                .iter_mut()
+                .zip(&mut self.token_streams)
+                .enumerate()
+            {
+                let logits = narrow!(&logits, U0: [{ i }, U1])?;
+                let logits = squeeze![&logits, U1, U0]?.to_dtype(DType::F32)?;
+                let logits = if self.repeat_penalty == 1. {
+                    logits
+                } else {
+                    let start_at = v.len().saturating_sub(self.repeat_last_n);
+                    candle_transformers::utils::apply_repeat_penalty(
+                        logits.inner(),
+                        self.repeat_penalty,
+                        v.ctxt(start_at),
+                    )?
+                    .try_into()?
+                };
+
+                let next_token = self.logits_processor.sample(logits.inner())?;
+                v.push(next_token);
+                generated_tokens += 1;
+                if next_token == eos_token || next_token == eos_token2 {
+                    v.terminate();
+                }
+                if let Some(t) = st.next_token(next_token)? {
+                    if n_outputs == 1 {
+                        print!("{t}");
+                    } else if generated_tokens % 100 == 0 {
+                        println!("Generated {} tokens", generated_tokens);
+                    }
+                    finished_sequences[i].push(t);
+                }
             }
         }
         let dt = start_gen.elapsed();
-        if let Some(rest) = self.tokenizer.decode_rest().map_err(E::msg)? {
-            print!("{rest}");
+
+        for (i, (st, finished)) in self.token_streams.iter().zip(&mut finished_sequences).enumerate() {
+            if let Some(rest) = st.decode_rest()? {
+                finished.push(rest);
+            }
+            if n_outputs > 1 {
+                println!("[OUTPUT SEQUENCE {}]", i + 1);
+                for t in finished.iter() {
+                    print!("{t}");
+                }
+            }
+            println!("\n");
+            std::io::stdout().flush()?;
         }
         std::io::stdout().flush()?;
         println!(
@@ -158,6 +288,18 @@ impl TextGeneration {
 
 #[derive(Clone, Copy, Debug, clap::ValueEnum, PartialEq, Eq)]
 enum WhichModel {
+    #[value(name = "2.5-0.5b")]
+    W25_0_5b,
+    #[value(name = "2.5-1.5b")]
+    W25_1_5b,
+    #[value(name = "2.5-3b")]
+    W25_3b,
+    #[value(name = "2.5-7b")]
+    W25_7b,
+    #[value(name = "2.5-14b")]
+    W25_14b,
+    #[value(name = "2.5-32b")]
+    W25_32b,
     #[value(name = "3-0.6b")]
     W3_0_6b,
     #[value(name = "3-1.7b")]
@@ -193,12 +335,16 @@ struct Args {
     #[arg(long)]
     top_p: Option<f64>,
 
+    /// Nucleus sampling probability cutoff.
+    #[arg(long)]
+    top_k: Option<usize>,
+
     /// The seed to use when generating random samples.
     #[arg(long, default_value_t = 299792458)]
     seed: u64,
 
     /// The length of the sample to generate (in tokens).
-    #[arg(long, short = 'n', default_value_t = 10000)]
+    #[arg(long, default_value_t = 10000)]
     sample_len: usize,
 
     #[arg(long)]
@@ -221,8 +367,11 @@ struct Args {
     #[arg(long, default_value_t = 64)]
     repeat_last_n: usize,
 
-    #[arg(long, default_value = "0.5b")]
+    #[arg(long, default_value = "2.5-0.5b")]
     model: WhichModel,
+
+    #[arg(short, long, default_value_t = 1)]
+    num_return_sequences: usize,
 }
 
 fn main() -> Result<()> {
@@ -257,6 +406,12 @@ fn main() -> Result<()> {
         Some(model_id) => model_id,
         None => {
             let (version, size) = match args.model {
+                WhichModel::W25_0_5b => ("2.5-Coder", "0.5B-Instruct"),
+                WhichModel::W25_1_5b => ("2.5-Coder", "1.5B-Instruct"),
+                WhichModel::W25_3b => ("2.5-Coder", "3B-Instruct"),
+                WhichModel::W25_7b => ("2.5-Coder", "7B-Instruct"),
+                WhichModel::W25_14b => ("2.5-Coder", "14B-Instruct"),
+                WhichModel::W25_32b => ("2.5-Coder", "32B-Instruct"),
                 WhichModel::W3_0_6b => ("3", "0.6B"),
                 WhichModel::W3_1_7b => ("3", "1.7B"),
                 WhichModel::W3_4b => ("3", "4B"),
@@ -280,12 +435,17 @@ fn main() -> Result<()> {
             .map(std::path::PathBuf::from)
             .collect::<Vec<_>>(),
         None => match args.model {
-            WhichModel::W3_0_6b => {
+            WhichModel::W25_0_5b | WhichModel::W25_1_5b | WhichModel::W3_0_6b => {
                 vec![repo.get("model.safetensors")?]
             }
-            WhichModel::W3_1_7b | WhichModel::W3_4b | WhichModel::W3_8b => {
-                hub_load_safetensors(&repo, "model.safetensors.index.json")?
-            }
+
+            WhichModel::W25_3b
+            | WhichModel::W25_7b
+            | WhichModel::W25_14b
+            | WhichModel::W25_32b
+            | WhichModel::W3_1_7b
+            | WhichModel::W3_4b
+            | WhichModel::W3_8b => hub_load_safetensors(&repo, "model.safetensors.index.json")?,
         },
     };
     println!("retrieved the files in {:?}", start.elapsed());
@@ -301,6 +461,15 @@ fn main() -> Result<()> {
     };
     let vb = unsafe { VarBuilder::from_mmaped_safetensors(&filenames, dtype, &device)? };
     let model = match args.model {
+        WhichModel::W25_0_5b
+        | WhichModel::W25_1_5b
+        | WhichModel::W25_3b
+        | WhichModel::W25_7b
+        | WhichModel::W25_14b
+        | WhichModel::W25_32b => {
+            let config: Config2 = serde_json::from_slice(&std::fs::read(config_file)?)?;
+            Model::Instruct2(Model2::new(&config, vb)?)
+        }
         WhichModel::W3_0_6b | WhichModel::W3_1_7b | WhichModel::W3_4b | WhichModel::W3_8b => {
             let config: Config3 = serde_json::from_slice(&std::fs::read(config_file)?)?;
             Model::Base3(Model3::new(&config, vb)?)
@@ -311,12 +480,14 @@ fn main() -> Result<()> {
 
     let mut pipeline = TextGeneration::new(
         model,
-        tokenizer,
+        &tokenizer,
         args.seed,
         args.temperature,
+        args.top_k,
         args.top_p,
         args.repeat_penalty,
         args.repeat_last_n,
+        args.num_return_sequences,
         &device,
     );
     pipeline.run(&args.prompt, args.sample_len)?;
@@ -347,15 +518,15 @@ pub fn device(cpu: bool) -> Result<Device> {
 
 /// This is a wrapper around a tokenizer to ensure that tokens can be returned to the user in a
 /// streaming way rather than having to wait for the full decoding.
-pub struct TokenOutputStream {
-    tokenizer: tokenizers::Tokenizer,
+pub struct TokenOutputStream<'a> {
+    tokenizer: &'a tokenizers::Tokenizer,
     tokens: Vec<u32>,
     prev_index: usize,
     current_index: usize,
 }
 
-impl TokenOutputStream {
-    pub fn new(tokenizer: tokenizers::Tokenizer) -> Self {
+impl<'a> TokenOutputStream<'a> {
+    pub fn new(tokenizer: &'a tokenizers::Tokenizer) -> Self {
         Self {
             tokenizer,
             tokens: Vec::new(),
@@ -364,7 +535,7 @@ impl TokenOutputStream {
         }
     }
 
-    pub fn into_inner(self) -> tokenizers::Tokenizer {
+    pub fn into_inner(self) -> &'a tokenizers::Tokenizer {
         self.tokenizer
     }
 
@@ -376,7 +547,7 @@ impl TokenOutputStream {
     }
 
     // https://github.com/huggingface/text-generation-inference/blob/5ba53d44a18983a4de32d122f4cb46f4a17d9ef6/server/text_generation_server/models/model.py#L68
-    pub fn next_token(&mut self, token: u32) -> Result<Option<String>> {
+    pub fn next_token(&mut self, token: u32) -> Result<Option<String>, Error> {
         let prev_text = if self.tokens.is_empty() {
             String::new()
         } else {
@@ -395,7 +566,7 @@ impl TokenOutputStream {
         }
     }
 
-    pub fn decode_rest(&self) -> Result<Option<String>> {
+    pub fn decode_rest(&self) -> Result<Option<String>, Error> {
         let prev_text = if self.tokens.is_empty() {
             String::new()
         } else {
@@ -420,7 +591,7 @@ impl TokenOutputStream {
     }
 
     pub fn tokenizer(&self) -> &tokenizers::Tokenizer {
-        &self.tokenizer
+        self.tokenizer
     }
 
     pub fn clear(&mut self) {

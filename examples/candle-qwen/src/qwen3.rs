@@ -68,13 +68,13 @@ impl Qwen3RotaryEmbedding {
     #[allow(clippy::type_complexity)]
     fn apply(
         &self,
-        q: &Tensor<Shape4<U1, U16, L, U128>>,
-        k: &Tensor<Shape4<U1, U8, L, U128>>,
+        q: &Tensor<Shape4<N, U16, L, U128>>,
+        k: &Tensor<Shape4<N, U8, L, U128>>,
         offset: usize,
     ) -> Result<
         (
-            Tensor<Shape4<U1, U16, L, U128>>,
-            Tensor<Shape4<U1, U8, L, U128>>,
+            Tensor<Shape4<N, U16, L, U128>>,
+            Tensor<Shape4<N, U8, L, U128>>,
         ),
         Error,
     > {
@@ -205,21 +205,22 @@ impl Qwen3Attention {
 
     pub(crate) fn forward(
         &mut self,
-        x: &Tensor<Shape3<U1, L, U1024>>,
-        attn_mask: Option<&Tensor<Shape4<U1, U1, L, U12>>>,
+        x: &Tensor<Shape3<N, L, U1024>>,
+        attn_mask: Option<&Tensor<Shape4<N, U1, L, U12>>>,
         offset: usize,
-    ) -> Result<Tensor<Shape3<U1, L, U1024>>, Error> {
+    ) -> Result<Tensor<Shape3<N, L, U1024>>, Error> {
         // 1. Proj
-        let q: Tensor<Shape3<U1, L, U2048>> = self.q_proj.forward(x.inner())?.try_into()?;
-        let k: Tensor<Shape3<U1, L, U1024>> = self.k_proj.forward(x.inner())?.try_into()?;
-        let v: Tensor<Shape3<U1, L, U1024>> = self.v_proj.forward(x.inner())?.try_into()?;
+        let q: Tensor<Shape3<N, L, U2048>> = self.q_proj.forward(x.inner())?.try_into()?;
+        let k: Tensor<Shape3<N, L, U1024>> = self.k_proj.forward(x.inner())?.try_into()?;
+        let v: Tensor<Shape3<N, L, U1024>> = self.v_proj.forward(x.inner())?.try_into()?;
 
         // 2. Reshape
-        let q = reshape!(&q, [U1, () => L, U16, U128])?;
+        let (_, l, _) = q.inner().dims3()?;
+        let q = reshape!(&q, [() => N, { l } => L, U16, U128])?;
         let q = transpose!(&q, U1:U2)?;
-        let k = reshape!(&k, [U1, () => L, U8, U128])?;
+        let k = reshape!(&k, [() => N, { l } => L, U8, U128])?;
         let k = transpose!(&k, U1:U2)?;
-        let v = reshape!(&v, [U1, () => L, U8, U128])?;
+        let v = reshape!(&v, [() => N, { l } => L, U8, U128])?;
         let v = transpose!(&v, U1:U2)?;
 
         // 3. Per‑head RMSNorm
@@ -227,8 +228,8 @@ impl Qwen3Attention {
         let k_flat = flatten!(&k, [U0, U2])?;
         let q_flat: Tensor<Shape2<Bhl, U128>> = self.q_norm.forward(q_flat.inner())?.try_into()?;
         let k_flat: Tensor<Shape2<Bhl, U128>> = self.k_norm.forward(k_flat.inner())?.try_into()?;
-        let q = reshape!(&q_flat, [U1, U16, () => L, U128])?;
-        let k = reshape!(&k_flat, [U1, U8, () => L, U128])?;
+        let q = reshape!(&q_flat, [() => N, U16, { l } => L, U128])?;
+        let k = reshape!(&k_flat, [() => N, U8, { l } => L, U128])?;
 
         // 4. RoPE
         let (q, k) = self.rotary_emb.apply(&q, &k, offset)?;
@@ -239,8 +240,8 @@ impl Qwen3Attention {
             .append(k.contiguous()?.inner(), v.contiguous()?.inner())?;
 
         // 6. GQA repeat_kv
-        let k: Tensor<Shape4<U1, U16, L, U128>> = repeat_kv(k, self.num_kv_groups)?.try_into()?;
-        let v: Tensor<Shape4<U1, U16, L, U128>> = repeat_kv(v, self.num_kv_groups)?.try_into()?;
+        let k: Tensor<Shape4<N, U16, L, U128>> = repeat_kv(k, self.num_kv_groups)?.try_into()?;
+        let v: Tensor<Shape4<N, U16, L, U128>> = repeat_kv(v, self.num_kv_groups)?.try_into()?;
 
         // 7. Attention score
         let scale = 1.0 / (self.head_dim as f64).sqrt();
@@ -250,13 +251,13 @@ impl Qwen3Attention {
         if let Some(m) = attn_mask {
             scores = broadcast_add!(scores, m)?;
         }
-        let probs: Tensor<Shape4<U1, U16, L, L>> =
+        let probs: Tensor<Shape4<N, U16, L, L>> =
             candle_nn::ops::softmax_last_dim(scores.inner())?.try_into()?;
         let ctx = matmul!(probs, &v)?;
 
         // 8. Output proj
         let ctx = transpose!(&ctx, U1:U2)?;
-        let ctx = reshape!(&ctx, [U1, () => L, U2048])?;
+        let ctx = reshape!(&ctx, [() => N, { l } => L, U2048])?;
         Ok(ctx.inner().apply(&self.o_proj)?.try_into()?)
     }
 
@@ -293,15 +294,15 @@ impl DecoderLayer {
 
     fn forward(
         &mut self,
-        x: &Tensor<Shape3<U1, L, U1024>>,
-        mask: Option<&Tensor<Shape4<U1, U1, L, U12>>>,
+        x: &Tensor<Shape3<N, L, U1024>>,
+        mask: Option<&Tensor<Shape4<N, U1, L, U12>>>,
         offset: usize,
-    ) -> Result<Tensor<Shape3<U1, L, U1024>>, Error> {
-        let h: Tensor<Shape3<U1, L, U1024>> = self.ln1.forward(x.inner())?.try_into()?;
+    ) -> Result<Tensor<Shape3<N, L, U1024>>, Error> {
+        let h: Tensor<Shape3<N, L, U1024>> = self.ln1.forward(x.inner())?.try_into()?;
         let h = self.self_attn.forward(&h, mask, offset)?;
         let x = (x + h)?;
-        let h2: Tensor<Shape3<U1, L, U1024>> = self.ln2.forward(x.inner())?.try_into()?;
-        let h2: Tensor<Shape3<U1, L, U1024>> = h2.inner().apply(&self.mlp)?.try_into()?;
+        let h2: Tensor<Shape3<N, L, U1024>> = self.ln2.forward(x.inner())?.try_into()?;
+        let h2: Tensor<Shape3<N, L, U1024>> = h2.inner().apply(&self.mlp)?.try_into()?;
         Ok((&x + h2)?)
     }
 
@@ -350,7 +351,7 @@ impl Model {
         tgt: usize,
         offset: usize,
         sw: Option<usize>,
-    ) -> Result<Tensor<Shape4<U1, U1, L, U12>>, Error> {
+    ) -> Result<Tensor<Shape4<N, U1, L, U12>>, Error> {
         let minf = f32::NEG_INFINITY;
         let mask: Vec<_> = (0..tgt)
             .flat_map(|i| {
@@ -377,16 +378,17 @@ impl Model {
 
     pub fn forward(
         &mut self,
-        input: &candle::Tensor,
+        input: &Tensor<Shape2<N, L>>,
         offset: usize,
-    ) -> Result<Tensor<Shape3<U1, L, U1024>>, Error> {
-        let (b, l) = input.dims2()?;
-        let mut h: Tensor<Shape3<U1, L, U1024>> = self.embed_tokens.forward(input)?.try_into()?;
+    ) -> Result<Tensor<Shape3<N, L, U1024>>, Error> {
+        let (n, l) = input.inner().dims2()?;
+        let mut h: Tensor<Shape3<N, L, U1024>> =
+            self.embed_tokens.forward(input.inner())?.try_into()?;
 
         let causal = if l == 1 {
             None
         } else {
-            Some(self.causal_mask(b, l, offset, None)?)
+            Some(self.causal_mask(n, l, offset, None)?)
         };
 
         for layer in &mut self.layers {
@@ -415,10 +417,10 @@ impl ModelForCausalLM {
 
     pub fn forward(
         &mut self,
-        input: &candle::Tensor,
+        input: &Tensor<Shape2<N, L>>,
         offset: usize,
-    ) -> Result<Tensor<Shape3<U1, U1, U151936>>, Error> {
-        let (_, l) = input.dims2()?;
+    ) -> Result<Tensor<Shape3<N, U1, U151936>>, Error> {
+        let (_, l) = input.inner().dims2()?;
         let t = self.base.forward(input, offset)?;
         let t = narrow!(&t, U1: [l - 1, U1])?;
         Ok(t.inner().apply(&self.lm_head)?.try_into()?)

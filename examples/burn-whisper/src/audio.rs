@@ -286,4 +286,3 @@ pub fn get_num_threads() -> usize {
         Some(_) | None => num_cpus::get(),
     }
 }
-

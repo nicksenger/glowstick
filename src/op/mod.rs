@@ -13,6 +13,5 @@ pub mod permute;
 pub mod reshape;
 pub mod squeeze;
 pub mod stack;
-pub mod transmute;
 pub mod transpose;
 pub mod unsqueeze;

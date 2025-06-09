@@ -3,22 +3,50 @@ use std::marker::PhantomData;
 use crate::{Error, Tensor};
 use glowstick::op::convolution::IsCompatible;
 use glowstick::{
-    Indexed, Shape, ShapeDiagnostic, ShapeFragment,
-    num::{U0, Unsigned},
+    num::{Unsigned, U0},
     op::convolution,
+    Indexed, Shape, ShapeDiagnostic, ShapeFragment,
 };
 
+/// Applies a 2D convolution over the input tensor with the provided kernel, padding,
+/// dilation, stride and groups.
+///
+/// # Example
+///
+/// ```rust
+/// # fn main() -> Result<(), glowstick_candle::Error> {
+/// use candle::{Device, DType};
+/// use glowstick_candle::{conv2d, Tensor};
+/// use glowstick::{Shape4, num::*};
+///
+/// let device = Device::Cpu;
+/// let input = Tensor::<Shape4<U2, U2, U5, U5>>::ones(DType::F32, &device)?;
+/// let kernel = Tensor::<Shape4<U4, U2, U3, U3>>::ones(DType::F32, &device)?;
+/// let convolved = conv2d!(input, kernel, U0, U1, U1, 1)?;
+///
+/// assert_eq!(convolved.dims(), &[2, 4, 3, 3]);
+/// # Ok(())
+/// # }
+/// ```
 #[macro_export]
 macro_rules! conv2d {
-    [$t:expr,$k:expr,$p:ty,$d:ty,$s:ty,$g:expr] => {{
-        use $crate::op::conv::Conv2d;
+    ($t:expr,$kernel:expr,$padding:ty,$dilation:ty,$stride:ty,$groups:expr) => {{
         use std::marker::PhantomData;
-        type Pad = glowstick::list![$p, $p];
-        type Dilation = glowstick::list![$d, $d];
-        type Stride = glowstick::list![$s, $s];
-        ($t, $k, PhantomData::<Pad>, PhantomData::<Pad>, PhantomData::<Dilation>, PhantomData::<Stride>, $g)
+        use $crate::op::conv::Conv2d;
+        type Pad = glowstick::list![$padding, $padding];
+        type Dilation = glowstick::list![$dilation, $dilation];
+        type Stride = glowstick::list![$stride, $stride];
+        (
+            $t,
+            $kernel,
+            PhantomData::<Pad>,
+            PhantomData::<Pad>,
+            PhantomData::<Dilation>,
+            PhantomData::<Stride>,
+            $groups,
+        )
             .conv2d()
-    }}
+    }};
 }
 
 pub trait Conv2d {

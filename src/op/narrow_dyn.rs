@@ -102,7 +102,7 @@ mod test {
 
     use super::*;
 
-    use crate::{Dyn, dynamic::Any, shape};
+    use crate::{Dyn, dynamic::Any, dyndims, shape};
 
     #[allow(unused)]
     #[test]
@@ -114,5 +114,16 @@ mod test {
             <(MyShape, U0, Dyn<Any>) as Compatible>::Out,
             shape![D, U1, U2]
         );
+    }
+
+    #[allow(unused)]
+    #[test]
+    fn dynamic() {
+        dyndims! {
+            N: SequenceLength,
+            B: BatchSize
+        }
+        type DynShape = shape![B, N, U3];
+        assert_type_eq!(<(DynShape, U1, N) as IsCompatible>::Out, True);
     }
 }

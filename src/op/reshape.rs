@@ -1,14 +1,25 @@
 use typosaurus::{collections::Container, traits::fold::Foldable};
 
 use crate::{
-    Product, Shape, ShapeDiagnostic, ShapeFragment, TensorShape,
     cmp::IsEqual,
     diagnostic::{self, Truthy},
     num::monoid::Multiplication,
+    Product, Shape, ShapeDiagnostic, ShapeFragment, Tensor, TensorShape,
 };
 
-struct Reshape;
+pub struct Reshape;
 impl diagnostic::Operation for Reshape {}
+
+pub fn check<T1, S1, S2>(_t1: &T1)
+where
+    T1: Tensor<Shape = S1>,
+    S1: ShapeDiagnostic,
+    S2: ShapeDiagnostic,
+    (S2, S1): IsCompatible,
+    <(S2, S1) as IsCompatible>::Out:
+        Truthy<Reshape, <S1 as ShapeDiagnostic>::Out, <S2 as ShapeDiagnostic>::Out>,
+{
+}
 
 /// Boolean type operator for `Reshape` compatibility.
 ///
@@ -69,7 +80,7 @@ mod test {
 
     use super::*;
 
-    use crate::{Dyn, dynamic::Any, shape};
+    use crate::{dynamic::Any, dyndims, shape, Dyn};
 
     #[allow(unused)]
     #[test]
@@ -114,7 +125,24 @@ mod test {
             True
         );
 
-        // TODO: this can be forbidden despite the wildness
         assert_type_eq!(<(MyShape, shape![U1]) as IsCompatible>::Out, True);
+    }
+
+    #[allow(unused)]
+    #[test]
+    fn dynamic() {
+        dyndims! {
+            B: BatchSize,
+            N: SequenceLength
+        }
+
+        type MyShape = shape![B, N, U2, U3];
+        assert_type_eq!(<(MyShape, shape![B, N, U6]) as IsCompatible>::Out, True);
+        assert_type_eq!(<(MyShape, shape![U1, U6, N, B]) as IsCompatible>::Out, True);
+        assert_type_eq!(<(MyShape, shape![B, N, U7]) as IsCompatible>::Out, False);
+        assert_type_eq!(
+            <(MyShape, shape![U1, U7, N, B]) as IsCompatible>::Out,
+            False
+        );
     }
 }

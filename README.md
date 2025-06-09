@@ -35,7 +35,7 @@ let reshaped = reshape!(my_tensor, [U64]).expect("reshape");
 let unsqueezed = unsqueeze!(reshaped, U0, U2).expect("unsqueeze");
 //debug_tensor!(unsqueezed); // [glowstick shape]: (RANK<_3>, (DIM<_1>, DIM<_64>, DIM<_1>))
 
-let squeezed = squeeze!(unsqueezed, U0, U1).expect("squeeze");
+let squeezed = squeeze!(unsqueezed, U0, U2).expect("squeeze");
 //debug_tensor!(squeezed); // [glowstick shape]: (RANK<_1>, (DIM<_64>))
 
 let narrowed = narrow!(squeezed, U0: [U8, U5]).expect("narrow");

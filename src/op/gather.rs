@@ -1,11 +1,11 @@
 use core::ops::Add;
 
-use typosaurus::{bool::And, num::consts::U1, traits::semigroup::Mappend};
+use typosaurus::{bool::And, num::consts::U1};
 
 use crate::{
-    DecimalDiagnostic, Dimension, Dimensioned, IDX, MaxDim, Shape, ShapeDiagnostic, ShapeFragment,
-    SkipFragment, TakeFragment, TensorShape,
-    cmp::{IsGreater, IsGreaterOrEqual},
+    DecimalDiagnostic, Dimensioned, IDX, Shape, ShapeDiagnostic, ShapeFragment, SkipFragment,
+    TakeFragment, TensorShape,
+    cmp::{IsEqual, IsGreater},
     diagnostic::{self, Truthy},
 };
 
@@ -22,7 +22,7 @@ pub trait IsCompatible {
     type Out;
     crate::private!();
 }
-impl<T, I, U> IsCompatible for (TensorShape<T>, I, TensorShape<U>)
+impl<T, U, I> IsCompatible for (TensorShape<T>, TensorShape<U>, I)
 where
     TensorShape<T>: Shape + ShapeDiagnostic,
     T: ShapeFragment,
@@ -30,29 +30,18 @@ where
     U: ShapeFragment,
     (<T as ShapeFragment>::Rank, I): IsGreater,
     I: Add<U1>,
+    (<T as ShapeFragment>::Rank, <U as ShapeFragment>::Rank): IsEqual,
     (TensorShape<T>, I): TakeFragment,
     (TensorShape<T>, <I as Add<U1>>::Output): SkipFragment,
     (TensorShape<T>, I): Dimensioned,
-    TensorShape<U>: MaxDim,
-    <TensorShape<U> as MaxDim>::Out: Dimension,
-    (
-        <(TensorShape<T>, I) as Dimensioned>::Out,
-        <TensorShape<U> as MaxDim>::Out,
-    ): IsGreaterOrEqual,
     (
         <(<T as ShapeFragment>::Rank, I) as IsGreater>::Out,
-        <(
-            <(TensorShape<T>, I) as Dimensioned>::Out,
-            <TensorShape<U> as MaxDim>::Out,
-        ) as IsGreaterOrEqual>::Out,
+        <(<T as ShapeFragment>::Rank, <U as ShapeFragment>::Rank) as IsEqual>::Out,
     ): And,
 {
     type Out = <(
         <(<T as ShapeFragment>::Rank, I) as IsGreater>::Out,
-        <(
-            <(TensorShape<T>, I) as Dimensioned>::Out,
-            <TensorShape<U> as MaxDim>::Out,
-        ) as IsGreaterOrEqual>::Out,
+        <(<T as ShapeFragment>::Rank, <U as ShapeFragment>::Rank) as IsEqual>::Out,
     ) as And>::Out;
     crate::private_impl!();
 }
@@ -66,37 +55,18 @@ pub trait Compatible {
     type Out: Shape;
     crate::private!();
 }
-impl<T, I, U> Compatible for (TensorShape<T>, I, TensorShape<U>)
+impl<T, U, I> Compatible for (TensorShape<T>, TensorShape<U>, I)
 where
-    (TensorShape<T>, I, TensorShape<U>): IsCompatible,
-    <(TensorShape<T>, I, TensorShape<U>) as IsCompatible>::Out: Truthy<Gather, <TensorShape<T> as ShapeDiagnostic>::Out, IDX<<I as DecimalDiagnostic>::Out>>,
+    (TensorShape<T>, TensorShape<U>, I): IsCompatible,
+    <(TensorShape<T>, TensorShape<U>, I) as IsCompatible>::Out: Truthy<Gather, <TensorShape<T> as ShapeDiagnostic>::Out, IDX<<I as DecimalDiagnostic>::Out>>,
     I: DecimalDiagnostic,
     TensorShape<T>: Shape + ShapeDiagnostic,
     TensorShape<U>: Shape + ShapeDiagnostic,
     T: ShapeFragment,
     U: ShapeFragment,
     (<T as ShapeFragment>::Rank, I): IsGreater,
-    I: Add<U1>,
-    TensorShape<U>: MaxDim,
-    (TensorShape<T>, I): TakeFragment,
-    (TensorShape<T>, <I as Add<U1>>::Output): SkipFragment,
-    (TensorShape<T>, I): Dimensioned,
-    (<(TensorShape<T>, I) as TakeFragment>::Out, U): Mappend,
-    (
-        <(<(TensorShape<T>, I) as TakeFragment>::Out, U) as Mappend>::Out,
-        <(TensorShape<T>, <I as Add<U1>>::Output) as SkipFragment>::Out,
-    ): Mappend,
-    <(
-        <(<(TensorShape<T>, I) as TakeFragment>::Out, U) as Mappend>::Out,
-        <(TensorShape<T>, <I as Add<U1>>::Output) as SkipFragment>::Out,
-    ) as Mappend>::Out: ShapeFragment,
 {
-    type Out = TensorShape<
-        <(
-            <(<(TensorShape<T>, I) as TakeFragment>::Out, U) as Mappend>::Out,
-            <(TensorShape<T>, <I as Add<U1>>::Output) as SkipFragment>::Out,
-        ) as Mappend>::Out,
-    >;
+    type Out = TensorShape<U>;
     crate::private_impl!();
 }
 
@@ -116,11 +86,11 @@ mod test {
     #[test]
     fn basic() {
         type MyShape = shape![U3, U42, U2];
-        type Another = shape![U6, U6];
-        assert_type_eq!(<(MyShape, U1, Another) as IsCompatible>::Out, True);
+        type Another = shape![U6, U6, U2];
+        assert_type_eq!(<(MyShape, Another, U1) as IsCompatible>::Out, True);
         assert_type_eq!(
-            <(MyShape, U1, Another) as Compatible>::Out,
-            shape![U3, U6, U6, U2]
+            <(MyShape, Another, U1) as Compatible>::Out,
+            shape![U6, U6, U2]
         );
     }
 
@@ -128,21 +98,15 @@ mod test {
     #[test]
     fn wild() {
         type B = Dyn<Any>;
-        type MyShape = shape![U1, U42, B, U1];
-        type Another = shape![U6, U6];
-        assert_type_eq!(<(MyShape, U2, Another) as IsCompatible>::Out, True);
+        type MyShape = shape![U2, U42, B, U2];
+        type Another = shape![U2, U42, B, U1];
+        assert_type_eq!(<(MyShape, Another, U3) as IsCompatible>::Out, True);
         assert_type_eq!(
-            <(MyShape, U2, Another) as Compatible>::Out,
-            shape![U1, U42, U6, U6, U1]
-        );
-
-        assert_type_eq!(<(MyShape, U1, Another) as IsCompatible>::Out, True);
-        assert_type_eq!(
-            <(MyShape, U1, Another) as Compatible>::Out,
-            shape![U1, U6, U6, B, U1]
+            <(MyShape, Another, U2) as Compatible>::Out,
+            shape![U2, U42, B, U1]
         );
 
         type Invalid = shape![U420, U420];
-        assert_type_eq!(<(MyShape, U1, Invalid) as IsCompatible>::Out, False);
+        assert_type_eq!(<(MyShape, Invalid, U1) as IsCompatible>::Out, False);
     }
 }

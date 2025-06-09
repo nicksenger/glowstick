@@ -1,14 +1,14 @@
 use typosaurus::traits::semigroup::Mappend;
 
 use crate::{
-    IsFragEqualOrOne, MaxDims, Shape, ShapeDiagnostic, ShapeFragment, SkipFragment, TakeFragment,
-    TensorShape,
     cmp::IsGreaterOrEqual,
     diagnostic::{self, Truthy},
     num::Sub,
+    IsFragEqualOrOne, MaxDims, Shape, ShapeDiagnostic, ShapeFragment, SkipFragment, TakeFragment,
+    TensorShape,
 };
 
-struct Broadcast;
+pub struct Broadcast;
 impl diagnostic::Operation for Broadcast {}
 
 /// Boolean type operator for `Broadcast` compatibility.
@@ -34,10 +34,10 @@ where
         <TensorShape<T> as Shape>::Rank,
         <TensorShape<U> as Shape>::Rank,
     ) as IsGreaterOrEqual>::Out: Truthy<
-            Broadcast,
-            <TensorShape<T> as crate::ShapeDiagnostic>::Out,
-            <TensorShape<U> as crate::ShapeDiagnostic>::Out,
-        >,
+        Broadcast,
+        <TensorShape<T> as crate::ShapeDiagnostic>::Out,
+        <TensorShape<U> as crate::ShapeDiagnostic>::Out,
+    >,
     (
         <TensorShape<T> as Shape>::Rank,
         <TensorShape<U> as Shape>::Rank,
@@ -110,10 +110,10 @@ where
         <TensorShape<T> as Shape>::Rank,
         <TensorShape<U> as Shape>::Rank,
     ) as IsGreaterOrEqual>::Out: Truthy<
-            Broadcast,
-            <TensorShape<T> as crate::ShapeDiagnostic>::Out,
-            <TensorShape<U> as crate::ShapeDiagnostic>::Out,
-        >,
+        Broadcast,
+        <TensorShape<T> as crate::ShapeDiagnostic>::Out,
+        <TensorShape<U> as crate::ShapeDiagnostic>::Out,
+    >,
     (
         <TensorShape<T> as Shape>::Rank,
         <TensorShape<U> as Shape>::Rank,
@@ -151,10 +151,10 @@ where
     ): IsFragEqualOrOne,
     (TensorShape<T>, TensorShape<U>): IsCompatible,
     <(TensorShape<T>, TensorShape<U>) as IsCompatible>::Out: Truthy<
-            Broadcast,
-            <TensorShape<T> as crate::ShapeDiagnostic>::Out,
-            <TensorShape<U> as crate::ShapeDiagnostic>::Out,
-        >,
+        Broadcast,
+        <TensorShape<T> as crate::ShapeDiagnostic>::Out,
+        <TensorShape<U> as crate::ShapeDiagnostic>::Out,
+    >,
     (
         <(
             TensorShape<T>,
@@ -235,12 +235,12 @@ mod test {
     use typosaurus::{
         assert_type_eq,
         bool::{False, True},
-        num::consts::{U1, U16, U42, U128, U422},
+        num::consts::{U1, U128, U16, U42, U422},
     };
 
     use super::*;
 
-    use crate::{Dyn, dynamic::Any, shape};
+    use crate::{dynamic::Any, shape, Dyn};
 
     #[allow(unused)]
     #[test]

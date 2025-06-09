@@ -3,15 +3,27 @@ use core::ops::Add;
 use typosaurus::num::consts::U1;
 use typosaurus::{bool::And, traits::semigroup::Mappend};
 
+use crate::Tensor;
 use crate::{
-    DecimalDiagnostic, Dimensioned, Shape, ShapeDiagnostic, ShapeFragment, SkipFragment,
-    TakeFragment, TensorShape,
     cmp::{IsEqual, IsGreater},
     diagnostic::{self, Truthy},
+    DecimalDiagnostic, Dimensioned, Shape, ShapeDiagnostic, ShapeFragment, SkipFragment,
+    TakeFragment, TensorShape,
 };
 
-struct Squeeze;
+pub struct Squeeze;
 impl diagnostic::Operation for Squeeze {}
+
+pub fn check<T1, S1, I>(_t1: &T1)
+where
+    T1: Tensor<Shape = S1>,
+    S1: ShapeDiagnostic,
+    I: DecimalDiagnostic,
+    (S1, I): IsCompatible,
+    <(S1, I) as IsCompatible>::Out:
+        Truthy<Squeeze, <S1 as ShapeDiagnostic>::Out, <I as DecimalDiagnostic>::Out>,
+{
+}
 
 /// Boolean type operator for `Squeeze` compatibility.
 ///
@@ -63,10 +75,10 @@ where
     (TensorShape<T>, <I as Add<U1>>::Output): SkipFragment,
     (TensorShape<T>, I): IsCompatible,
     <(TensorShape<T>, I) as IsCompatible>::Out: Truthy<
-            Squeeze,
-            <TensorShape<T> as crate::ShapeDiagnostic>::Out,
-            crate::IDX<<I as crate::DecimalDiagnostic>::Out>,
-        >,
+        Squeeze,
+        <TensorShape<T> as crate::ShapeDiagnostic>::Out,
+        crate::IDX<<I as crate::DecimalDiagnostic>::Out>,
+    >,
     (
         <(TensorShape<T>, I) as TakeFragment>::Out,
         <(TensorShape<T>, <I as Add<U1>>::Output) as SkipFragment>::Out,
@@ -90,12 +102,12 @@ mod test {
     use typosaurus::{
         assert_type_eq,
         bool::{False, True},
-        num::consts::{U0, U1, U2, U3, U4, U5, U6, U64, U151, U936, U1000},
+        num::consts::{U0, U1, U1000, U151, U2, U3, U4, U5, U6, U64, U936},
     };
 
     use super::*;
 
-    use crate::{Dyn, dynamic::Any, shape};
+    use crate::{dynamic::Any, shape, Dyn};
 
     #[allow(unused)]
     #[test]

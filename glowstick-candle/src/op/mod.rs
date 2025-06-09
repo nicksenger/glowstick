@@ -1,1 +1,16 @@
+pub mod broadcast_add;
+pub mod cat;
 pub mod conv;
+pub mod expand;
+pub mod flatten;
+pub mod gather;
+pub mod log_softmax;
+pub mod matmul;
+pub mod narrow;
+pub mod narrow_dyn;
+pub mod narrow_dyn_start;
+pub mod reshape;
+pub mod softmax;
+pub mod squeeze;
+pub mod transpose;
+pub mod unsqueeze;

@@ -10,7 +10,10 @@ categories.workspace = true
 keywords.workspace = true
 
 [dependencies]
-burn = "0.17"
+burn = { version = "0.17", default-features = false }
 glowstick.workspace = true
 thiserror.workspace = true
+
+[dev-dependencies]
+burn = { version = "0.17", default-features = false, features = ["ndarray"] }
 

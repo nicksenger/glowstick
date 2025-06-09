@@ -6,15 +6,26 @@ use typosaurus::{
 };
 
 use crate::{
-    DecimalDiagnostic, Dimension, Dimensioned, IDX, Shape, ShapeDiagnostic, ShapeFragment,
-    SkipFragment, TakeFragment, TensorShape,
     cmp::{IsGreater, IsGreaterOrEqual},
     diagnostic::{self, Truthy},
     num::Add,
+    DecimalDiagnostic, Dimension, Dimensioned, Shape, ShapeDiagnostic, ShapeFragment, SkipFragment,
+    TakeFragment, Tensor, TensorShape, IDX,
 };
 
-struct Narrow;
+pub struct Narrow;
 impl diagnostic::Operation for Narrow {}
+
+pub fn check<T, TS, I, S, L>(_t: &T)
+where
+    T: Tensor<Shape = TS>,
+    TS: ShapeDiagnostic,
+    I: DecimalDiagnostic,
+    (TS, I, S, L): IsCompatible,
+    <(TS, I, S, L) as IsCompatible>::Out:
+        Truthy<Narrow, <TS as ShapeDiagnostic>::Out, <I as DecimalDiagnostic>::Out>,
+{
+}
 
 /// Boolean type operator for `Narrow` compatibility.
 ///
@@ -70,7 +81,11 @@ pub trait Compatible {
 impl<T, I, S, L> Compatible for (TensorShape<T>, I, S, L)
 where
     (TensorShape<T>, I, S, L): IsCompatible,
-    <(TensorShape<T>, I, S, L) as IsCompatible>::Out: Truthy<Narrow, <TensorShape<T> as ShapeDiagnostic>::Out, IDX<<I as DecimalDiagnostic>::Out>>,
+    <(TensorShape<T>, I, S, L) as IsCompatible>::Out: Truthy<
+        Narrow,
+        <TensorShape<T> as ShapeDiagnostic>::Out,
+        IDX<<I as DecimalDiagnostic>::Out>,
+    >,
     I: DecimalDiagnostic,
     L: Dimension,
     TensorShape<T>: Shape + ShapeDiagnostic,
@@ -109,12 +124,12 @@ mod test {
     use typosaurus::{
         assert_type_eq,
         bool::True,
-        num::consts::{U0, U1, U2, U3, U6, U42},
+        num::consts::{U0, U1, U2, U3, U42, U6},
     };
 
     use super::*;
 
-    use crate::{Dyn, dynamic::Any, shape};
+    use crate::{dynamic::Any, shape, Dyn};
 
     #[allow(unused)]
     #[test]

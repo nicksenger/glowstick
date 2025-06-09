@@ -11,7 +11,7 @@ keywords.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-typosaurus = { git = "https://github.com/nicksenger/typosaurus.git", branch = "feat/value-list" }
+typosaurus = { version = "0.2.0" }
 
 [workspace]
 members = [
@@ -21,7 +21,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Nick Senger <dev@nsenger.com>"]
 edition = "2024"
 license = "MIT"
@@ -35,6 +35,4 @@ glowstick = { path = "." }
 glowstick-burn = { path = "./glowstick-burn" }
 glowstick-candle = { path = "./glowstick-candle" }
 thiserror = "2"
-
-[dev-dependencies]
 

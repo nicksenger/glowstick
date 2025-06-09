@@ -1,15 +1,8 @@
-use std::{borrow::Borrow, marker::PhantomData};
+use std::marker::PhantomData;
 
-use candle::{DType, Device, shape::ShapeWithOneHole};
+use candle::{DType, Device};
 
-use glowstick::{
-    Shape, TensorShape,
-    num::Unsigned,
-    op::{
-        broadcast, cat_dyn, flatten, matmul, narrow, narrow_dyn, narrow_dyn_start, reshape,
-        squeeze, transpose, unsqueeze,
-    },
-};
+use glowstick::Shape;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -28,10 +21,17 @@ pub enum Error {
 }
 
 #[allow(unused)]
-pub struct Tensor<S: Shape>(candle::Tensor, PhantomData<S>);
+#[derive(Debug)]
+pub struct Tensor<S: Shape>(pub(crate) candle::Tensor, pub(crate) PhantomData<S>);
 impl<S: Shape> AsRef<candle::Tensor> for Tensor<S> {
     fn as_ref(&self) -> &candle::Tensor {
         self.inner()
+    }
+}
+
+impl<S: Shape> Clone for Tensor<S> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone(), PhantomData)
     }
 }
 
@@ -84,6 +84,69 @@ where
         Ok(Tensor((&self.0 + rhs.0)?, PhantomData))
     }
 }
+impl<S> std::ops::Add<Tensor<S>> for Tensor<S>
+where
+    S: Shape,
+{
+    type Output = Result<Tensor<S>, Error>;
+    fn add(self, rhs: Tensor<S>) -> Result<Tensor<S>, Error> {
+        Ok(Tensor((self.0 + rhs.0)?, PhantomData))
+    }
+}
+impl<S> std::ops::Add<&Tensor<S>> for &Tensor<S>
+where
+    S: Shape,
+{
+    type Output = Result<Tensor<S>, Error>;
+    fn add(self, rhs: &Tensor<S>) -> Result<Tensor<S>, Error> {
+        Ok(Tensor((&self.0 + &rhs.0)?, PhantomData))
+    }
+}
+impl<S> std::ops::Add<&Tensor<S>> for Tensor<S>
+where
+    S: Shape,
+{
+    type Output = Result<Tensor<S>, Error>;
+    fn add(self, rhs: &Tensor<S>) -> Result<Tensor<S>, Error> {
+        Ok(Tensor((self.0 + &rhs.0)?, PhantomData))
+    }
+}
+impl<S> std::ops::Sub<Tensor<S>> for Tensor<S>
+where
+    S: Shape,
+{
+    type Output = Result<Tensor<S>, Error>;
+    fn sub(self, rhs: Tensor<S>) -> Result<Tensor<S>, Error> {
+        Ok(Tensor((&self.0 - rhs.0)?, PhantomData))
+    }
+}
+impl<S> std::ops::Mul<Tensor<S>> for Tensor<S>
+where
+    S: Shape,
+{
+    type Output = Result<Tensor<S>, Error>;
+    fn mul(self, rhs: Tensor<S>) -> Result<Tensor<S>, Error> {
+        Ok(Tensor((&self.0 * rhs.0)?, PhantomData))
+    }
+}
+impl<S> std::ops::Mul<&Tensor<S>> for Tensor<S>
+where
+    S: Shape,
+{
+    type Output = Result<Tensor<S>, Error>;
+    fn mul(self, rhs: &Tensor<S>) -> Result<Tensor<S>, Error> {
+        Ok(Tensor((&self.0 * &rhs.0)?, PhantomData))
+    }
+}
+impl<S> std::ops::Mul<&Tensor<S>> for &Tensor<S>
+where
+    S: Shape,
+{
+    type Output = Result<Tensor<S>, Error>;
+    fn mul(self, rhs: &Tensor<S>) -> Result<Tensor<S>, Error> {
+        Ok(Tensor((&self.0 * &rhs.0)?, PhantomData))
+    }
+}
 
 impl<S> std::ops::Mul<f64> for Tensor<S>
 where
@@ -92,6 +155,25 @@ where
     type Output = Result<Tensor<S>, Error>;
     fn mul(self, rhs: f64) -> Result<Tensor<S>, Error> {
         Ok(Tensor((&self.0 * rhs)?, PhantomData))
+    }
+}
+
+impl<S> std::ops::Div<Tensor<S>> for Tensor<S>
+where
+    S: Shape,
+{
+    type Output = Result<Tensor<S>, Error>;
+    fn div(self, rhs: Tensor<S>) -> Result<Tensor<S>, Error> {
+        Ok(Tensor((&self.0 / &rhs.0)?, PhantomData))
+    }
+}
+impl<S> std::ops::Div<f64> for Tensor<S>
+where
+    S: Shape,
+{
+    type Output = Result<Tensor<S>, Error>;
+    fn div(self, rhs: f64) -> Result<Tensor<S>, Error> {
+        Ok(Tensor((&self.0 / rhs)?, PhantomData))
     }
 }
 
@@ -107,10 +189,30 @@ where
         <S as Shape>::iter().collect::<Vec<_>>()
     }
 
+    pub fn dims(&self) -> &[usize] {
+        self.inner().dims()
+    }
+
+    pub fn from_vec<D: candle::WithDType>(v: Vec<D>, device: &Device) -> Result<Self, Error> {
+        candle::Tensor::from_vec(v, Self::shape(), device)
+            .map(|t| Self(t, PhantomData))
+            .map_err(Into::into)
+    }
+
     pub fn zeros(dtype: DType, device: &Device) -> Result<Self, Error> {
         candle::Tensor::zeros(Self::shape(), dtype, device)
             .map(|t| Self(t, PhantomData))
             .map_err(Into::into)
+    }
+
+    pub fn ones(dtype: DType, device: &Device) -> Result<Self, Error> {
+        candle::Tensor::ones(Self::shape(), dtype, device)
+            .map(|t| Self(t, PhantomData))
+            .map_err(Into::into)
+    }
+
+    pub fn zeros_like(&self) -> Result<Self, Error> {
+        Ok(Self(self.0.zeros_like()?, PhantomData))
     }
 
     /// Return the candle tensor, discarding type information
@@ -122,566 +224,47 @@ where
         Ok(Self(self.0.to_dtype(dtype)?, PhantomData))
     }
 
+    pub fn dtype(&self) -> candle::DType {
+        self.0.dtype()
+    }
+
     pub fn contiguous(&self) -> Result<Self, Error> {
         Ok(Self(self.0.contiguous()?, PhantomData))
     }
-}
 
-pub trait Squeeze {
-    type Out;
-    fn squeeze(&self) -> Self::Out;
-}
-impl<S, Dim> Squeeze for (&Tensor<S>, PhantomData<Dim>)
-where
-    S: Shape,
-    Dim: Unsigned,
-    (S, Dim): squeeze::Compatible,
-{
-    type Out = Result<Tensor<<(S, Dim) as squeeze::Compatible>::Out>, Error>;
-    fn squeeze(&self) -> Self::Out {
-        self.0.inner().squeeze(<Dim as Unsigned>::USIZE)?.try_into()
+    pub fn exp(&self) -> Result<Self, Error> {
+        Ok(Self(self.0.exp()?, PhantomData))
     }
-}
-impl<S, Dim> Squeeze for (Tensor<S>, PhantomData<Dim>)
-where
-    S: Shape,
-    Dim: Unsigned,
-    (S, Dim): squeeze::Compatible,
-{
-    type Out = Result<Tensor<<(S, Dim) as squeeze::Compatible>::Out>, Error>;
-    fn squeeze(&self) -> Self::Out {
-        self.0.inner().squeeze(<Dim as Unsigned>::USIZE)?.try_into()
+
+    pub fn clamp(&self, a: f32, b: f32) -> Result<Self, Error> {
+        Ok(Self(self.0.clamp(a, b)?, PhantomData))
     }
-}
 
-#[allow(unused)]
-pub trait Unsqueeze {
-    type Out;
-    fn unsqueeze(&self) -> Self::Out;
-}
-impl<S, Dim> Unsqueeze for (&Tensor<S>, PhantomData<Dim>)
-where
-    S: Shape,
-    Dim: Unsigned,
-    (S, Dim): unsqueeze::Compatible,
-{
-    type Out = Result<Tensor<<(S, Dim) as unsqueeze::Compatible>::Out>, Error>;
-    fn unsqueeze(&self) -> Self::Out {
-        self.0
-            .inner()
-            .unsqueeze(<Dim as Unsigned>::USIZE)?
-            .try_into()
+    pub fn neg(&self) -> Result<Self, Error> {
+        Ok(Self(self.0.neg()?, PhantomData))
     }
-}
-impl<S, Dim> Unsqueeze for (Tensor<S>, PhantomData<Dim>)
-where
-    S: Shape,
-    Dim: Unsigned,
-    (S, Dim): unsqueeze::Compatible,
-{
-    type Out = Result<Tensor<<(S, Dim) as unsqueeze::Compatible>::Out>, Error>;
-    fn unsqueeze(&self) -> Self::Out {
-        self.0
-            .inner()
-            .unsqueeze(<Dim as Unsigned>::USIZE)?
-            .try_into()
+
+    pub fn to_device(&self, device: &Device) -> Result<Self, Error> {
+        Ok(Self(self.0.to_device(device)?, PhantomData))
     }
-}
 
-#[allow(unused)]
-pub trait Narrow {
-    type Out;
-    fn narrow(&self) -> Self::Out;
-}
-impl<T, S, Dim, Start, Len> Narrow
-    for (
-        T,
-        PhantomData<S>,
-        PhantomData<Dim>,
-        PhantomData<Start>,
-        PhantomData<Len>,
-    )
-where
-    T: Borrow<Tensor<S>>,
-    S: Shape,
-    Dim: Unsigned,
-    Start: Unsigned,
-    Len: Unsigned,
-    (S, Dim, Start, Len): narrow::Compatible,
-{
-    type Out = Result<Tensor<<(S, Dim, Start, Len) as narrow::Compatible>::Out>, Error>;
-    fn narrow(&self) -> Self::Out {
-        self.0
-            .borrow()
-            .inner()
-            .narrow(
-                <Dim as Unsigned>::USIZE,
-                <Start as Unsigned>::USIZE,
-                <Len as Unsigned>::USIZE,
-            )?
-            .try_into()
+    pub fn log(&self) -> Result<Self, Error> {
+        Ok(Self(self.0.log()?, PhantomData))
     }
-}
 
-pub trait NarrowDynStart {
-    type Out;
-    fn narrow_dyn_start(&self) -> Self::Out;
-}
-impl<T, S, Dim, Len> NarrowDynStart
-    for (T, PhantomData<S>, PhantomData<Dim>, usize, PhantomData<Len>)
-where
-    T: Borrow<Tensor<S>>,
-    S: Shape,
-    Dim: Unsigned,
-    Len: Unsigned,
-    (S, Dim, Len): narrow_dyn_start::Compatible,
-{
-    type Out = Result<Tensor<<(S, Dim, Len) as narrow_dyn_start::Compatible>::Out>, Error>;
-    fn narrow_dyn_start(&self) -> Self::Out {
-        self.0
-            .borrow()
-            .inner()
-            .narrow(<Dim as Unsigned>::USIZE, self.3, <Len as Unsigned>::USIZE)?
-            .try_into()
+    pub fn minimum(&self, other: &Self) -> Result<Self, Error> {
+        Ok(Self(self.0.minimum(other.inner())?, PhantomData))
     }
-}
 
-#[allow(unused)]
-pub trait NarrowDyn {
-    type Out;
-    fn narrow_dyn(&self) -> Self::Out;
-}
-impl<T, S, Dim, DynDim> NarrowDyn
-    for (
-        T,
-        PhantomData<S>,
-        PhantomData<Dim>,
-        PhantomData<DynDim>,
-        usize,
-        usize,
-    )
-where
-    T: Borrow<Tensor<S>>,
-    S: Shape,
-    Dim: Unsigned,
-    (S, Dim, DynDim): narrow_dyn::Compatible,
-{
-    type Out = Result<Tensor<<(S, Dim, DynDim) as narrow_dyn::Compatible>::Out>, Error>;
-    fn narrow_dyn(&self) -> Self::Out {
-        self.0
-            .borrow()
-            .inner()
-            .narrow(<Dim as Unsigned>::USIZE, self.4, self.5)?
-            .try_into()
+    pub fn maximum(&self, other: &Self) -> Result<Self, Error> {
+        Ok(Self(self.0.maximum(other.inner())?, PhantomData))
     }
-}
 
-pub trait Reshape {
-    type Out;
-    fn reshape<Args: ShapeWithOneHole>(&self, args: Args) -> Self::Out;
-}
-
-impl<T, S1, S2> Reshape for (T, PhantomData<S1>, PhantomData<S2>)
-where
-    T: Borrow<Tensor<S1>>,
-    S1: Shape,
-    S2: Shape,
-    (S1, S2): reshape::Compatible,
-{
-    type Out = Result<Tensor<<(S1, S2) as reshape::Compatible>::Out>, Error>;
-    fn reshape<Args: ShapeWithOneHole>(&self, args: Args) -> Self::Out {
-        self.0.borrow().inner().reshape(args)?.try_into()
+    pub fn detach(self) -> Self {
+        Self(self.0.detach(), PhantomData)
     }
-}
 
-pub trait Transpose {
-    type Out;
-    fn transpose(&self) -> Self::Out;
-}
-impl<T, S, Dim1, Dim2> Transpose for (T, PhantomData<S>, PhantomData<Dim1>, PhantomData<Dim2>)
-where
-    T: Borrow<Tensor<S>>,
-    S: Shape,
-    Dim1: Unsigned,
-    Dim2: Unsigned,
-    (S, Dim1, Dim2): transpose::Compatible,
-{
-    type Out = Result<Tensor<<(S, Dim1, Dim2) as transpose::Compatible>::Out>, Error>;
-    fn transpose(&self) -> Self::Out {
-        self.0
-            .borrow()
-            .inner()
-            .transpose(
-                <Dim1 as glowstick::num::Unsigned>::USIZE,
-                <Dim2 as glowstick::num::Unsigned>::USIZE,
-            )?
-            .try_into()
+    pub fn abs(&self) -> Result<Self, Error> {
+        Ok(Self(self.0.abs()?, PhantomData))
     }
-}
-
-pub trait Flatten {
-    type Out;
-    fn flatten(&self) -> Self::Out;
-}
-impl<S, Dim1, Dim2> Flatten for (Tensor<S>, PhantomData<Dim1>, PhantomData<Dim2>)
-where
-    S: Shape,
-    Dim1: Unsigned,
-    Dim2: Unsigned,
-    (S, Dim1, Dim2): flatten::Compatible,
-{
-    type Out = Result<Tensor<<(S, Dim1, Dim2) as flatten::Compatible>::Out>, Error>;
-    fn flatten(&self) -> Self::Out {
-        self.0
-            .inner()
-            .flatten(
-                <Dim1 as glowstick::num::Unsigned>::USIZE,
-                <Dim2 as glowstick::num::Unsigned>::USIZE,
-            )?
-            .try_into()
-    }
-}
-impl<S, Dim1, Dim2> Flatten for (&Tensor<S>, PhantomData<Dim1>, PhantomData<Dim2>)
-where
-    S: Shape,
-    Dim1: Unsigned,
-    Dim2: Unsigned,
-    (S, Dim1, Dim2): flatten::Compatible,
-{
-    type Out = Result<Tensor<<(S, Dim1, Dim2) as flatten::Compatible>::Out>, Error>;
-    fn flatten(&self) -> Self::Out {
-        self.0
-            .inner()
-            .flatten(
-                <Dim1 as glowstick::num::Unsigned>::USIZE,
-                <Dim2 as glowstick::num::Unsigned>::USIZE,
-            )?
-            .try_into()
-    }
-}
-
-pub trait BroadcastAdd {
-    type Out;
-    fn broadcast_add(&self) -> Self::Out;
-}
-impl<S1, S2> BroadcastAdd for (Tensor<S1>, Tensor<S2>)
-where
-    S1: Shape,
-    S2: Shape,
-    (S1, S2): broadcast::Compatible,
-{
-    type Out = Result<Tensor<<(S1, S2) as broadcast::Compatible>::Out>, Error>;
-    fn broadcast_add(&self) -> Self::Out {
-        self.0
-            .inner()
-            .broadcast_add(self.1.borrow().inner())?
-            .try_into()
-    }
-}
-impl<S1, S2> BroadcastAdd for (Tensor<S1>, &Tensor<S2>)
-where
-    S1: Shape,
-    S2: Shape,
-    (S1, S2): broadcast::Compatible,
-{
-    type Out = Result<Tensor<<(S1, S2) as broadcast::Compatible>::Out>, Error>;
-    fn broadcast_add(&self) -> Self::Out {
-        self.0.inner().broadcast_add(self.1.inner())?.try_into()
-    }
-}
-impl<S1, S2> BroadcastAdd for (&Tensor<S1>, Tensor<S2>)
-where
-    S1: Shape,
-    S2: Shape,
-    (S1, S2): broadcast::Compatible,
-{
-    type Out = Result<Tensor<<(S1, S2) as broadcast::Compatible>::Out>, Error>;
-    fn broadcast_add(&self) -> Self::Out {
-        self.0
-            .inner()
-            .broadcast_add(self.1.borrow().inner())?
-            .try_into()
-    }
-}
-impl<S1, S2> BroadcastAdd for (&Tensor<S1>, &Tensor<S2>)
-where
-    S1: Shape,
-    S2: Shape,
-    (S1, S2): broadcast::Compatible,
-{
-    type Out = Result<Tensor<<(S1, S2) as broadcast::Compatible>::Out>, Error>;
-    fn broadcast_add(&self) -> Self::Out {
-        self.0.inner().broadcast_add(self.1.inner())?.try_into()
-    }
-}
-
-pub trait Matmul {
-    type Out;
-    fn matmul(self) -> Self::Out;
-}
-impl<S1, U, S2> Matmul for (Tensor<S1>, U, PhantomData<S2>)
-where
-    U: Borrow<Tensor<S2>>,
-    S1: Shape + matmul::Operand,
-    S2: Shape + matmul::Operand,
-    (S1, S2): matmul::Compatible,
-{
-    type Out = Result<Tensor<TensorShape<<(S1, S2) as matmul::Compatible>::Out>>, Error>;
-    fn matmul(self) -> Self::Out {
-        self.0
-            .into_inner()
-            .matmul(self.1.borrow().inner())?
-            .try_into()
-    }
-}
-impl<S1, U, S2> Matmul for (&Tensor<S1>, U, PhantomData<S2>)
-where
-    U: Borrow<Tensor<S2>>,
-    S1: Shape + matmul::Operand,
-    S2: Shape + matmul::Operand,
-    (S1, S2): matmul::Compatible,
-{
-    type Out = Result<Tensor<TensorShape<<(S1, S2) as matmul::Compatible>::Out>>, Error>;
-    fn matmul(self) -> Self::Out {
-        self.0.inner().matmul(self.1.borrow().inner())?.try_into()
-    }
-}
-
-pub trait Cat {
-    type Out;
-    fn cat(self) -> Self::Out;
-}
-impl<S, I, D> Cat for (&[Tensor<S>], PhantomData<I>, PhantomData<glowstick::Dyn<D>>)
-where
-    S: Shape,
-    (S, I, glowstick::Dyn<D>): cat_dyn::Compatible,
-    I: Unsigned,
-{
-    type Out = Result<Tensor<<(S, I, glowstick::Dyn<D>) as cat_dyn::Compatible>::Out>, Error>;
-    fn cat(self) -> Self::Out {
-        candle::Tensor::cat(self.0, <I as Unsigned>::USIZE)?.try_into()
-    }
-}
-
-#[macro_export]
-macro_rules! squeeze {
-    [$t:expr,$i:ty] => {{
-        use $crate::tensor::Squeeze;
-        ($t, std::marker::PhantomData::<$i>).squeeze()
-    }};
-    [$t:expr,$i:ty,$($is:ty),+] => {{
-        use $crate::tensor::Squeeze;
-        ($t, std::marker::PhantomData::<$i>).squeeze()
-            .and_then(|t| $crate::squeeze![t, $($is),+])
-    }};
-}
-
-#[macro_export]
-macro_rules! unsqueeze {
-    [$t:expr,$i:ty] => {{
-        use $crate::tensor::Unsqueeze;
-        ($t, std::marker::PhantomData::<$i>).unsqueeze()
-    }};
-    [$t:expr,$i:ty,$($is:ty),+] => {{
-        use $crate::tensor::Unsqueeze;
-        ($t, std::marker::PhantomData::<$i>).unsqueeze()
-            .and_then(|t| $crate::unsqueeze![t, $($is),+])
-    }};
-}
-
-#[macro_export]
-macro_rules! narrow {
-    ($t:expr,$d:ty:[$s:ty,$l:ty]) => {{
-        use $crate::tensor::Narrow;
-        (
-            $t,
-            std::marker::PhantomData,
-            std::marker::PhantomData::<$d>,
-            std::marker::PhantomData::<$s>,
-            std::marker::PhantomData::<$l>
-        ).narrow()
-    }};
-    ($t:expr,$d:ty:[$s:expr,$l:ty]) => {{
-        use $crate::tensor::NarrowDynStart;
-        (
-            $t,
-            std::marker::PhantomData,
-            std::marker::PhantomData::<$d>,
-            $s,
-            std::marker::PhantomData::<$l>,
-        )
-            .narrow_dyn_start()
-    }};
-    ($t:expr,$d:ty:[$s:expr,$l:expr] => $y:ty) => {{
-        use $crate::tensor::NarrowDyn;
-        (
-            $t,
-            std::marker::PhantomData::<$d>,
-            std::marker::PhantomData::<$y>,
-            $s,
-            $l,
-        )
-            .narrow_dyn()
-    }};
-    ($t:expr,$d:ty:[$s:ty,$l:ty],$($ds:tt)+) => {{
-        use $crate::tensor::Narrow;
-        (
-            $t,
-            std::marker::PhantomData::<$d>,
-            std::marker::PhantomData::<$s>,
-            std::marker::PhantomData::<$l>,
-        )
-            .narrow().and_then(|t| $crate::narrow!(&t,$($ds)+))
-    }};
-    ($t:expr,$d:ty:[$s:expr,$l:ty],$($ds:tt)+) => {{
-        use $crate::tensor::NarrowDynStart;
-        (
-            $t,
-            std::marker::PhantomData::<$d>,
-            $s,
-            std::marker::PhantomData::<$l>,
-        )
-            .narrow_dyn_start().and_then(|t| $crate::narrow!(&t,$($ds)+))
-    }};
-    ($t:expr,$d:ty:[$s:expr,$l:expr] => $y:ty,$($ds:tt)+) => {{
-        use $crate::tensor::NarrowDyn;
-        (
-            $t,
-            std::marker::PhantomData::<$d>,
-            std::marker::PhantomData::<$y>,
-            $s,
-            $l,
-        )
-            .narrow_dyn().and_then(|t| $crate::narrow!(&t,$($ds)+))
-    }};
-}
-
-#[macro_export]
-macro_rules! reshape {
-    ($t:expr,[$($ds:tt)+]) => {{
-        use $crate::tensor::Reshape;
-        (
-            $t,
-            std::marker::PhantomData,
-            std::marker::PhantomData::<glowstick::TensorShape<$crate::reshape_tys!($($ds)+)>>,
-        )
-            .reshape($crate::reshape_val!($($ds)+).tuplify())
-    }};
-}
-#[macro_export]
-macro_rules! reshape_tys {
-    ($e:expr => $d:ty) => {
-        glowstick::Shp<(<$d as glowstick::dynamic::Dim>::Id, glowstick::Empty)>
-    };
-    ($e:expr => $d:ty,$($ds:tt)+) => {
-        glowstick::Shp<(<$d as glowstick::dynamic::Dim>::Id, $crate::reshape_tys!($($ds)+))>
-    };
-    ($d:ty) => {
-        glowstick::Shp<($d, glowstick::Empty)>
-    };
-    ($d:ty,$($ds:tt)+) => {
-        glowstick::Shp<($d, $crate::reshape_tys!($($ds)+))>
-    };
-}
-#[macro_export]
-macro_rules! reshape_val {
-    ($e:expr => $d:ty) => {
-        glowstick::ValueList(($e, glowstick::ValueList(())))
-    };
-    ($d:ty) => {
-        glowstick::ValueList((<$d as glowstick::num::Unsigned>::USIZE,glowstick::ValueList(())))
-    };
-    ($e:expr => $d:ty,$($ds:tt)+) => {
-        glowstick::ValueList(($e,$crate::reshape_val!($($ds)+)))
-    };
-    ($d:ty,$($ds:tt)+) => {
-        glowstick::ValueList((<$d as glowstick::num::Unsigned>::USIZE,$crate::reshape_val!($($ds)+)))
-    };
-}
-
-#[macro_export]
-macro_rules! transpose {
-    ($t:expr,$d1:ty:$d2:ty) => {{
-        use $crate::tensor::Transpose;
-        (
-            $t,
-            std::marker::PhantomData,
-            std::marker::PhantomData::<$d1>,
-            std::marker::PhantomData::<$d2>,
-        )
-            .transpose()
-    }};
-    ($t:expr,$d1:ty:$d2:ty,$($d1s:ty:$d2s:ty),+) => {{
-        use $crate::tensor::Transpose;
-        (
-            $t,
-            std::marker::PhantomData,
-            std::marker::PhantomData::<$d1>,
-            std::marker::PhantomData::<$d2>,
-        )
-            .transpose().and_then(|t| $crate::transpose!(&t, $($d1s:$d2s),+))
-    }};
-}
-
-#[macro_export]
-macro_rules! flatten {
-    ($t:expr,[$d1:ty,$d2:ty]) => {{
-        use $crate::tensor::Flatten;
-        (
-            $t,
-            std::marker::PhantomData::<$d1>,
-            std::marker::PhantomData::<$d2>,
-        )
-            .flatten()
-    }};
-    ($t:expr,[$d1:ty,$d2:ty],$([$d1s:ty,$d2s:ty]),+) => {{
-        use $crate::tensor::Flatten;
-        (
-            $t,
-            std::marker::PhantomData::<$d1>,
-            std::marker::PhantomData::<$d2>,
-        )
-            .flatten().and_then(|t| $crate::flatten!(&t, $([$d1s,$d2s]),+))
-    }};
-}
-
-#[macro_export]
-macro_rules! broadcast_add {
-    ($t1:expr,$t2:expr) => {{
-        use $crate::tensor::BroadcastAdd;
-        ($t1, $t2).broadcast_add()
-    }};
-    ($t1:expr,$t2:expr,$($t2s:expr),+) => {{
-        use $crate::tensor::BroadcastAdd;
-        ($t1, $t2)
-            .broadcast_add()
-            .and_then(|t| $crate::broadcast_add!(&t, $t2s))
-    }};
-}
-
-#[macro_export]
-macro_rules! matmul {
-    ($t1:expr,$t2:expr) => {{
-        use $crate::tensor::Matmul;
-        ($t1, $t2, std::marker::PhantomData).matmul()
-    }};
-    ($t1:expr,$t2:expr,$($t2s:expr),+) => {{
-        use $crate::tensor::Matmul;
-        ($t1, $t2, std::marker::PhantomData)
-            .matmul()
-            .and_then(|t| $crate::matmul!(&t, $t2s))
-    }};
-}
-
-#[macro_export]
-macro_rules! cat {
-    ($ts:expr,$i:ty => $d:ty) => {{
-        use $crate::tensor::Cat;
-        (
-            $ts,
-            std::marker::PhantomData::<$i>,
-            std::marker::PhantomData::<$d>,
-        )
-            .cat()
-    }};
 }

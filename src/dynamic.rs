@@ -133,10 +133,15 @@ where
     type Label = (<Coeff as DecimalDiagnostic>::Out, Var);
 }
 
-// TODO: derive macro probably more appropriate here
+pub struct DynProduct<T, U>(PhantomData<T>, PhantomData<U>);
+impl<T, U> IsDynEqual<DynProduct<T, U>> for DynProduct<T, U> {
+    type Out = True;
+}
+
+// TODO: explore type-level map/counter for this
 #[macro_export]
-macro_rules! dyndim {
-    [$id:ident <- $label:ident] => {
+macro_rules! dyndims {
+    {$id:ident:$label:ident} => {
         pub struct $label;
         pub type $id = $crate::Dyn<$crate::dynamic::Term<$crate::num::U1, $label>>;
         impl $crate::dynamic::IsDynEqual<$label> for $label {
@@ -145,5 +150,19 @@ macro_rules! dyndim {
         impl $crate::dynamic::DynMax<$label> for $label {
             type Out = $label;
         }
+    };
+    {$id1:ident:$label1:ident,$($id2:ident:$label2:ident),+} => {
+        dyndims!{$id1:$label1}
+
+        $(
+            impl $crate::dynamic::DynMul<$label2> for $label1 {
+                type Out = $crate::dynamic::DynProduct<$label1, $label2>;
+            }
+            impl $crate::dynamic::DynMul<$label1> for $label2 {
+                type Out = $crate::dynamic::DynProduct<$label1, $label2>;
+            }
+        )+
+
+        dyndims!{$($id2:$label2),+}
     };
 }

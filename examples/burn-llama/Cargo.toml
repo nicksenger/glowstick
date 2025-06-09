@@ -1,0 +1,25 @@
+[package]
+name = "burn-llama"
+edition = "2021"
+default-run = "chat"
+
+[features]
+default = ["wgpu"]
+3b = [] # loads llama3.2 3b instead of 1b
+cuda = ["burn/cuda"]
+wgpu = ["burn/wgpu"]
+
+[dependencies]
+base64 = { version = "0.22" }
+burn = { version = "0.17", default-features = false, features = ["network", "std"] }
+clap = { version = "4.5", features = ["derive"] }
+dirs = { version = "5.0" }
+glowstick = { path = "../.." }
+glowstick-burn = { path = "../../glowstick-burn" }
+rand = { version = "0.9" }
+rustc-hash = { version = "1.1" }
+thiserror = "2.0"
+tiktoken-rs = { version = "0.5" }
+
+[[bin]]
+name = "chat"

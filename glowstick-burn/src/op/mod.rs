@@ -1,1 +1,17 @@
-
+pub mod argmax;
+pub mod cat;
+pub mod expand;
+pub mod flatten;
+pub mod gather;
+pub mod log_softmax;
+pub mod matmul;
+pub mod mean_dim;
+pub mod narrow;
+pub mod reshape;
+pub mod softmax;
+pub mod sort_descending_with_indices;
+pub mod squeeze;
+pub mod transpose;
+pub mod tril_mask;
+pub mod unsqueeze;
+pub mod var_mean;

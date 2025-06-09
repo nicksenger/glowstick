@@ -1,6 +1,6 @@
 # glowstick
 
-This is crate makes working with tensors in Rust safe, **easy**, and _fun_ by tracking their shapes in the type system!
+This crate makes working with tensors in Rust safe, **easy**, and _fun_ by tracking their shapes in the type system!
 
 Example usage with candle:
 

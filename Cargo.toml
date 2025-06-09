@@ -31,8 +31,8 @@ keywords = ["science", "math", "machine-learning", "metaprogramming", "types"]
 rust-version = "1.85"
 
 [workspace.dependencies]
-glowstick = { path = "." }
-glowstick-burn = { path = "./glowstick-burn" }
-glowstick-candle = { path = "./glowstick-candle" }
+glowstick = { path = ".", version = "0.2.0" }
+glowstick-burn = { path = "./glowstick-burn", version = "0.2.0" }
+glowstick-candle = { path = "./glowstick-candle", version = "0.2.0" }
 thiserror = "2"
 

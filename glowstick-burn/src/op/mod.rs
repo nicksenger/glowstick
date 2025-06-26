@@ -1,4 +1,5 @@
 pub mod argmax;
+pub mod argmin;
 pub mod cat;
 pub mod expand;
 pub mod flatten;

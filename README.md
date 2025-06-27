@@ -13,7 +13,7 @@ let a: Tensor<Shape2<U2, U1>> = Tensor::zeros(DType::F32, &Device::Cpu).expect("
 let b: Tensor<Shape2<U1, U2>> = Tensor::zeros(DType::F32, &Device::Cpu).expect("tensor B");
 
 let c = matmul!(a, b).expect("matmul");
-//debug_tensor!(c); // Compile error: [glowstick shape]: (RANK<_2>, (DIM<_2>, DIM<_2>))
+//debug_tensor!(c); // [glowstick shape]: (RANK<_2>, (DIM<_2>, DIM<_2>))
 ```
 
 Several operations are available:
@@ -27,7 +27,7 @@ use glowstick_candle::{Tensor, conv2d, squeeze, unsqueeze, narrow, reshape, tran
 use glowstick::debug_tensor;
 
 let my_tensor: Tensor<Shape2<U8, U8>> = Tensor::zeros(DType::F32, &Device::Cpu).expect("tensor");
-//debug_tensor!(my_tensor); // Compile error: [glowstick shape]: (RANK<_2>, (DIM<_8>, DIM<_8>))
+//debug_tensor!(my_tensor); // [glowstick shape]: (RANK<_2>, (DIM<_8>, DIM<_8>))
 
 let reshaped = reshape!(my_tensor, [U64]).expect("reshape"); 
 //debug_tensor!(reshaped); // [glowstick shape]: (RANK<_1>, (DIM<_64>))

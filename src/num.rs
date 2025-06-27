@@ -1,11 +1,11 @@
-use crate::Dyn;
 use crate::dynamic::DynAdd;
 use crate::dynamic::DynMul;
+use crate::Dyn;
 use typosaurus::collections::list::{Empty, List};
 use typosaurus::num::UTerm;
 
 pub use typosaurus::num::consts::*;
-pub use typosaurus::num::{UInt, Unsigned};
+pub use typosaurus::num::{NonZero, UInt, Unsigned};
 use typosaurus::traits::functor::Mapper;
 
 pub trait Div {
